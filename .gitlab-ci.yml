@@ -1,6 +1,6 @@
 include:
 - project: iiidevops-templates/ci-template
-  ref: v2.12.5
+  ref: v2.12.6
   file: ci/template.gitlab-ci.yml
 - local: iiidevops/jobs/*.yml
 stages:

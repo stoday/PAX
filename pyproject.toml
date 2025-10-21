@@ -7,7 +7,9 @@ requires-python = ">=3.10"
 dependencies = [
     "beautifulsoup4>=4.14.2",
     "dotenv>=0.9.9",
+    "pyfiglet>=1.0.4",
     "python-dotenv>=1.1.1",
+    "rich>=13.9.4",
     "selenium>=4.37.0",
     "webdriver-manager>=4.0.2",
 ]

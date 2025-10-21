@@ -1,118 +1,37 @@
 
 import requests
 from urllib.parse import quote
-from urllib.parse import urlparse
-import dotenv
 from bs4 import BeautifulSoup
 import platform
-import sys
 import datetime
 import calendar
+from pyfiglet import Figlet
+from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Confirm
+from rich.table import Table
+from rich import box
 
 
-# 自動處理資料表單填寫與送出
-year_month = "2025/10"
-encoded_ym = quote(year_month)
-URL = f"https://hrwt.iii.org.tw/TSM/MyWorkTime.aspx?YM={encoded_ym}"
+BASE_TIMESHEET_URL = "https://hrwt.iii.org.tw/TSM/MyWorkTime.aspx"
+TIMESHEET_ORIGIN = "https://hrwt.iii.org.tw"
+console = Console()
+figlet = Figlet(font="slant")
 
-# 使用 POST 送出表單資料
-FORM_DATA = {
-    # 填入從瀏覽器開發者工具觀察到的表單資料
-    "__EVENTTARGET": "ctl00$ContentPlaceHolder1$btnEdit",
-    "__EVENTARGUMENT": "",
-    "__VIEWSTATE": "<GET_FROM_BROWSER>",
-    "__VIEWSTATEGENERATOR": "<GET_FROM_BROWSER>",
-    "__EVENTVALIDATION": "<GET_FROM_BROWSER>",
-    "ctl00$ContentPlaceHolder1$txb_StDay": "2025/10",
-    "ctl00$ContentPlaceHolder1$txtArr_20251001": "09:00",
-    "ctl00$ContentPlaceHolder1$txtLev_20251001": "18:00",
-    "ctl00$ContentPlaceHolder1$Dp_20251001": "忘刷",
-    "ctl00$ContentPlaceHolder1$txtR_20251001": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251002": "09:00",
-    "ctl00$ContentPlaceHolder1$txtLev_20251002": "18:00",
-    "ctl00$ContentPlaceHolder1$Dp_20251002": "忘刷",
-    "ctl00$ContentPlaceHolder1$txtR_20251002": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251003": "09:00",
-    "ctl00$ContentPlaceHolder1$txtLev_20251003": "18:00",
-    "ctl00$ContentPlaceHolder1$Dp_20251003": "忘刷",
-    "ctl00$ContentPlaceHolder1$txtR_20251003": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251004": "",
-    "ctl00$ContentPlaceHolder1$txtLev_20251004": "",
-    "ctl00$ContentPlaceHolder1$Dp_20251004": "",
-    "ctl00$ContentPlaceHolder1$txtR_20251004": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251005": "",
-    "ctl00$ContentPlaceHolder1$txtLev_20251005": "",
-    "ctl00$ContentPlaceHolder1$Dp_20251005": "",
-    "ctl00$ContentPlaceHolder1$txtR_20251005": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251006": "",
-    "ctl00$ContentPlaceHolder1$txtLev_20251006": "",
-    "ctl00$ContentPlaceHolder1$Dp_20251006": "",
-    "ctl00$ContentPlaceHolder1$txtR_20251006": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251007": "08:30",
-    "ctl00$ContentPlaceHolder1$txtLev_20251007": "18:36",
-    "ctl00$ContentPlaceHolder1$Dp_20251007": "忘刷",
-    "ctl00$ContentPlaceHolder1$txtR_20251007": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251008": "09:00",
-    "ctl00$ContentPlaceHolder1$txtLev_20251008": "18:00",
-    "ctl00$ContentPlaceHolder1$Dp_20251008": "忘刷",
-    "ctl00$ContentPlaceHolder1$txtR_20251008": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251009": "09:00",
-    "ctl00$ContentPlaceHolder1$txtLev_20251009": "18:00",
-    "ctl00$ContentPlaceHolder1$Dp_20251009": "忘刷",
-    "ctl00$ContentPlaceHolder1$txtR_20251009": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251010": "",
-    "ctl00$ContentPlaceHolder1$txtLev_20251010": "",
-    "ctl00$ContentPlaceHolder1$Dp_20251010": "",
-    "ctl00$ContentPlaceHolder1$txtR_20251010": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251011": "",
-    "ctl00$ContentPlaceHolder1$txtLev_20251011": "",
-    "ctl00$ContentPlaceHolder1$Dp_20251011": "",
-    "ctl00$ContentPlaceHolder1$txtR_20251011": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251012": "",
-    "ctl00$ContentPlaceHolder1$txtLev_20251012": "",
-    "ctl00$ContentPlaceHolder1$Dp_20251012": "",
-    "ctl00$ContentPlaceHolder1$txtR_20251012": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251013": "09:00",
-    "ctl00$ContentPlaceHolder1$txtLev_20251013": "18:00",
-    "ctl00$ContentPlaceHolder1$Dp_20251013": "忘刷",
-    "ctl00$ContentPlaceHolder1$txtR_20251013": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251014": "09:00",
-    "ctl00$ContentPlaceHolder1$txtLev_20251014": "18:00",
-    "ctl00$ContentPlaceHolder1$Dp_20251014": "忘刷",
-    "ctl00$ContentPlaceHolder1$txtR_20251014": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251015": "08:59",
-    "ctl00$ContentPlaceHolder1$txtLev_20251015": "18:00",
-    "ctl00$ContentPlaceHolder1$Dp_20251015": "忘刷",
-    "ctl00$ContentPlaceHolder1$txtR_20251015": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251016": "09:00",
-    "ctl00$ContentPlaceHolder1$txtLev_20251016": "18:35",
-    "ctl00$ContentPlaceHolder1$Dp_20251016": "忘刷",
-    "ctl00$ContentPlaceHolder1$txtR_20251016": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251017": "09:00",
-    "ctl00$ContentPlaceHolder1$txtLev_20251017": "18:40",
-    "ctl00$ContentPlaceHolder1$Dp_20251017": "忘刷",
-    "ctl00$ContentPlaceHolder1$txtR_20251017": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251018": "",
-    "ctl00$ContentPlaceHolder1$txtLev_20251018": "",
-    "ctl00$ContentPlaceHolder1$Dp_20251018": "",
-    "ctl00$ContentPlaceHolder1$txtR_20251018": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251019": "",
-    "ctl00$ContentPlaceHolder1$txtLev_20251019": "",
-    "ctl00$ContentPlaceHolder1$Dp_20251019": "",
-    "ctl00$ContentPlaceHolder1$txtR_20251019": "",
-    "ctl00$ContentPlaceHolder1$txtArr_20251020": "08:36",
-    "ctl00$ContentPlaceHolder1$txtLev_20251020": "18:23",
-    "ctl00$ContentPlaceHolder1$Dp_20251020": "忘刷",
-    "ctl00$ContentPlaceHolder1$txtR_20251020": "",
-    "ctl00$ContentPlaceHolder1$HidWkHCtrl": "20251004;20251005;20251006;20251010;20251011;20251012;20251018;20251019",
-    "ctl00$ContentPlaceHolder1$HidWkACtrl": "20251001;20251002;20251003;20251008;20251009;20251013;20251014;20251015;20251016;20251017;20251020",
-    "ctl00$ContentPlaceHolder1$HideStTimes": "",
-    "ctl00$ContentPlaceHolder1$HidEdTimes": ""
-}
 
-def generate_form_data(year_month=None, default_work_times=None):
+def build_timesheet_url(year_month=None):
+    """Construct the timesheet URL optionally bound to a specific year/month."""
+    if year_month:
+        encoded_ym = quote(year_month)
+        return f"{BASE_TIMESHEET_URL}?YM={encoded_ym}"
+    return BASE_TIMESHEET_URL
+
+
+def generate_form_data(year_month=None, 
+                       default_work_times=None,
+                       until_date=None):
     """
-    自動生成 FORM_DATA
+    自動生成工時表單資料
     
     Args:
         year_month (str): 年月，格式如 "2025/10"，如果不提供則使用當前月份
@@ -161,12 +80,14 @@ def generate_form_data(year_month=None, default_work_times=None):
     
     # 取得該月的天數
     days_in_month = calendar.monthrange(year, month)[1]
-    
+    if until_date is None or until_date > days_in_month:
+        until_date = days_in_month
+
     # 生成每一天的表單欄位
     work_days = []  # 記錄工作日
     holidays = []   # 記錄假日
-    
-    for day in range(1, days_in_month + 1):
+
+    for day in range(1, (until_date) + 1):
         date_str = f"{year}{month:02d}{day:02d}"  # 格式: 20251001
         
         # 判斷是否為工作日 (週一到週五)
@@ -194,17 +115,13 @@ def generate_form_data(year_month=None, default_work_times=None):
     form_data["ctl00$ContentPlaceHolder1$HideStTimes"] = ""
     form_data["ctl00$ContentPlaceHolder1$HidEdTimes"] = ""
     
-    print(f"📅 生成 {year_month} 的表單資料")
-    print(f"📊 工作日: {len(work_days)} 天")
-    print(f"🏖️ 假日: {len(holidays)} 天")
-    print(f"⏰ 預設上班時間: {default_work_times['arrival_time']}")
-    print(f"⏰ 預設下班時間: {default_work_times['leave_time']}")
+    console.print(f"[bold green]📅 生成 {year_month} 的表單資料[/bold green]")
+    console.print(f"[cyan]📊 工作日: {len(work_days)} 天[/cyan]")
+    console.print(f"[cyan]🏖️ 假日: {len(holidays)} 天[/cyan]")
+    console.print(f"[magenta]⏰ 預設上班時間: {default_work_times['arrival_time']}[/magenta]")
+    console.print(f"[magenta]⏰ 預設下班時間: {default_work_times['leave_time']}[/magenta]")
     
     return form_data
-
-bearer_token = dotenv.get_key(".env", "TEL_BEARER_TOKEN")
-parsed_url = urlparse(URL)
-origin = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
 def get_dynamic_user_agent():
     """根據當前系統環境動態生成 User-Agent"""
@@ -279,36 +196,30 @@ def get_fresh_form_data(year_month=None, work_times=None):
         "sec-ch-ua-platform": platform_info
     }
     
-    print(f"🌐 使用動態 User-Agent: {user_agent}")
-    print(f"💻 平台資訊: {platform_info}")
+    console.print(f"[bold cyan]🌐 使用動態 User-Agent:[/bold cyan] {user_agent}")
+    console.print(f"[bold cyan]💻 平台資訊:[/bold cyan] {platform_info}")
     
     # 設定重要的認證 cookies
     session.cookies.set('ASP.NET_SessionId', 'ixhecp5h5eyglywk52u4452s', domain='hrwt.iii.org.tw')
     session.cookies.set('clientTicket', 'acecc412-c129-4534-a52b-b5746b307421', domain='hrwt.iii.org.tw')
     session.cookies.set('clientUserName', '970123', domain='hrwt.iii.org.tw')
     
-    print("正在獲取最新的頁面資料...")
+    target_url = build_timesheet_url(year_month)
+    console.print(f"[cyan]正在獲取最新的頁面資料: {target_url}[/cyan]")
     
-    # 如果有指定年月，更新 URL
-    if year_month:
-        encoded_ym = quote(year_month)
-        url = f"https://hrwt.iii.org.tw/TSM/MyWorkTime.aspx?YM={encoded_ym}"
-    else:
-        url = URL
-        
-    response = session.get(url, headers=headers)
+    response = session.get(target_url, headers=headers)
     
     if response.status_code != 200:
-        print(f"無法訪問頁面，狀態碼: {response.status_code}")
+        console.print(f"[bold red]無法訪問頁面，狀態碼: {response.status_code}[/bold red]")
         return None, None
     
-    print(f"成功取得頁面，長度: {len(response.text)} 字元")
+    console.print(f"[green]成功取得頁面，長度: {len(response.text)} 字元[/green]")
     
     # 顯示從伺服器收到的 cookies
     if response.cookies:
-        print("🍪 從伺服器收到的 cookies:")
+        console.print("[yellow]🍪 從伺服器收到的 cookies:[/yellow]")
         for cookie in session.cookies:
-            print(f"  {cookie.name}={cookie.value}")
+            console.print(f"  {cookie.name}={cookie.value}")
     
     # 解析 HTML 取得隱藏欄位
     soup = BeautifulSoup(response.text, 'html.parser')
@@ -318,16 +229,16 @@ def get_fresh_form_data(year_month=None, work_times=None):
     event_validation = soup.find('input', {'name': '__EVENTVALIDATION'})
     
     if not all([viewstate, viewstate_generator, event_validation]):
-        print("❌ 無法找到必要的隱藏欄位，可能需要重新登入")
-        print(f"找到 __VIEWSTATE: {viewstate is not None}")
-        print(f"找到 __VIEWSTATEGENERATOR: {viewstate_generator is not None}")
-        print(f"找到 __EVENTVALIDATION: {event_validation is not None}")
+        console.print("[bold red]❌ 無法找到必要的隱藏欄位，可能需要重新登入[/bold red]")
+        console.print(f"[red]找到 __VIEWSTATE: {viewstate is not None}[/red]")
+        console.print(f"[red]找到 __VIEWSTATEGENERATOR: {viewstate_generator is not None}[/red]")
+        console.print(f"[red]找到 __EVENTVALIDATION: {event_validation is not None}[/red]")
         return None, None
     
-    print("✅ 成功取得所有隱藏欄位")
-    print(f"__VIEWSTATE 長度: {len(viewstate['value'])}")
-    print(f"__VIEWSTATEGENERATOR: {viewstate_generator['value']}")
-    print(f"__EVENTVALIDATION 長度: {len(event_validation['value'])}")
+    console.print("[bold green]✅ 成功取得所有隱藏欄位[/bold green]")
+    console.print(f"[green]__VIEWSTATE 長度: {len(viewstate['value'])}[/green]")
+    console.print(f"[green]__VIEWSTATEGENERATOR: {viewstate_generator['value']}[/green]")
+    console.print(f"[green]__EVENTVALIDATION 長度: {len(event_validation['value'])}[/green]")
     
     # 動態生成表單資料
     fresh_form_data = generate_form_data(year_month, work_times)
@@ -339,10 +250,11 @@ def get_fresh_form_data(year_month=None, work_times=None):
     
     return fresh_form_data, session
 
-def get_post_headers():
+def get_post_headers(year_month=None):
     """取得 POST 提交時的完整 headers（根據當前系統環境）"""
     user_agent = get_dynamic_user_agent()
     platform_info = get_dynamic_platform_info()
+    referer_url = build_timesheet_url(year_month)
     
     return {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -352,8 +264,8 @@ def get_post_headers():
         "Connection": "keep-alive",
         "Content-Type": "application/x-www-form-urlencoded",
         "Host": "hrwt.iii.org.tw",
-        "Origin": origin,
-        "Referer": URL,
+        "Origin": TIMESHEET_ORIGIN,
+        "Referer": referer_url,
         "Sec-Fetch-Dest": "document",
         "Sec-Fetch-Mode": "navigate",
         "Sec-Fetch-Site": "same-origin",
@@ -365,60 +277,116 @@ def get_post_headers():
         "sec-ch-ua-platform": platform_info
     }
 
-# 主要執行流程
-if __name__ == "__main__":
-    # 可以自訂年月和工作時間
-    target_year_month = "2025/10"  # 或者設為 None 使用當前月份
-    
-    # 自訂工作時間（可選）
-    custom_work_times = {
-        'arrival_time': '09:00',
-        'leave_time': '18:00', 
-        'reason': '忘刷',
-        'remark': ''
-    }
-    
-    print(f"🚀 開始處理 {target_year_month or '當前月份'} 的工時表單")
-    
-    # 獲取最新的表單資料
-    fresh_form_data, session = get_fresh_form_data(target_year_month, custom_work_times)
-    
-    if fresh_form_data and session:
-        print("\n" + "="*50)
-        print("📝 正在提交表單...")
-        
-        # 取得 POST 的完整 headers
-        post_headers = get_post_headers()
-        print(f"📋 使用 headers: {list(post_headers.keys())}")
-        
-        # 更新 URL 以匹配目標年月
-        if target_year_month:
-            encoded_ym = quote(target_year_month)
-            submit_url = f"https://hrwt.iii.org.tw/TSM/MyWorkTime.aspx?YM={encoded_ym}"
-        else:
-            submit_url = URL
-        
-        # 使用相同的 session 提交表單（維持 cookie 狀態）
-        response = session.post(submit_url, data=fresh_form_data, headers=post_headers, allow_redirects=False)
-        
-        print(f"✅ 提交完成！狀態碼: {response.status_code}")
-        
-        if response.status_code == 302:
-            location = response.headers.get('Location', '未知')
-            print(f"🔄 重定向到: {location}")
-            
-            # 如果重定向不是到登入頁面，表示可能成功
-            if 'Default.aspx' not in location:
-                print("🎉 表單提交可能成功！")
-            else:
-                print("❌ 被重定向到登入頁面，可能需要重新認證")
-        elif response.status_code == 200:
-            print("📄 收到回應內容:")
-            print(response.text[:300] + "..." if len(response.text) > 300 else response.text)
-        else:
-            print(f"❓ 未預期的狀態碼: {response.status_code}")
-            print(f"回應內容: {response.text[:200]}")
-            
-        print(f"\n📊 回應標頭: {dict(response.headers)}")
+def display_welcome_banner():
+    ascii_banner = figlet.renderText("ClockMate")
+    panel = Panel.fit(
+        ascii_banner.rstrip(),
+        border_style="cyan",
+        title="ClockMate 工時小幫手",
+        # subtitle="填報助手",
+        style="bold magenta",
+    )
+    console.print(panel)
+    # console.rule("[bold cyan]開始設定[/bold cyan]")
+
+
+def prompt_with_default(prompt_text, default_value=None):
+    if default_value:
+        prompt = f"[bold white]{prompt_text}[/bold white] [[cyan]{default_value}[/cyan]]: "
     else:
-        print("❌ 無法獲取表單資料，請檢查網路連線或認證狀態")
+        prompt = f"[bold white]{prompt_text}[/bold white]: "
+    user_input = console.input(prompt).strip()
+    return user_input or default_value
+
+
+def prompt_yes_no(prompt_text, default=True):
+    return Confirm.ask(f"[bold white]{prompt_text}[/bold white]", default=default)
+
+
+def run_cli():
+    display_welcome_banner()
+    now = datetime.datetime.now()
+    default_year_month = f"{now.year}/{now.month:02d}"
+
+    console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值。[/bold]")
+    target_year_month = prompt_with_default("填寫年月 (YYYY/MM)", default_year_month)
+    arrival_time = prompt_with_default("預設上班時間 (HH:MM)", "09:00")
+    leave_time = prompt_with_default("預設下班時間 (HH:MM)", "18:00")
+    reason = prompt_with_default("預設原因", "忘刷")
+    remark = console.input("[bold white]預設備註 (可留空)[/bold white]: ").strip()
+
+    custom_work_times = {
+        'arrival_time': arrival_time,
+        'leave_time': leave_time,
+        'reason': reason,
+        'remark': remark
+    }
+
+    summary_table = Table(show_header=False, box=box.SIMPLE_HEAVY)
+    summary_table.add_row("✨ 年月", target_year_month)
+    summary_table.add_row("⏰ 上班/下班", f"{arrival_time} - {leave_time}")
+    summary_table.add_row("📝 原因", reason)
+    summary_table.add_row("💬 備註", remark or "（無）")
+
+    console.rule("[bold cyan]設定摘要[/bold cyan]")
+    console.print(summary_table)
+
+    if not prompt_yes_no("是否繼續並生成表單資料？", True):
+        console.print("[yellow]⚠️ 已取消操作。[/yellow]")
+        return
+
+    fetch_hidden = prompt_yes_no("要自動從系統取得最新的隱藏欄位嗎？", True)
+
+    form_data = None
+    session = None
+
+    if fetch_hidden:
+        console.print("[cyan]🔍 嘗試從遠端抓取最新表單設定...[/cyan]")
+        form_data, session = get_fresh_form_data(target_year_month, custom_work_times)
+        if not form_data:
+            console.print("[yellow]⚠️ 遠端資料抓取失敗，改用離線方式生成。[/yellow]")
+            form_data = generate_form_data(target_year_month, custom_work_times)
+    else:
+        form_data = generate_form_data(target_year_month, custom_work_times)
+
+    if not form_data:
+        console.print("[bold red]❌ 無法生成表單資料，請稍後再試。[/bold red]")
+        return
+
+    console.rule("[bold green]表單資料已完成建立[/bold green]")
+    if fetch_hidden and session:
+        if prompt_yes_no("需要立即提交表單嗎？", False):
+            console.rule("[bold magenta]提交表單[/bold magenta]")
+            console.print("📝 正在提交表單...")
+            post_headers = get_post_headers(target_year_month)
+            console.print(f"[dim]📋 使用 headers: {list(post_headers.keys())}[/dim]")
+
+            submit_url = build_timesheet_url(target_year_month)
+            response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
+
+            console.print(f"[bold green]✅ 提交完成！狀態碼: {response.status_code}[/bold green]")
+
+            if response.status_code == 302:
+                location = response.headers.get('Location', '未知')
+                console.print(f"[cyan]🔄 重定向到: {location}[/cyan]")
+
+                if 'Default.aspx' not in location:
+                    console.print("[bold green]🎉 表單提交可能成功！[/bold green]")
+                else:
+                    console.print("[bold red]❌ 被重定向到登入頁面，可能需要重新認證[/bold red]")
+            elif response.status_code == 200:
+                console.print("[cyan]📄 收到回應內容:[/cyan]")
+                console.print(response.text[:300] + "..." if len(response.text) > 300 else response.text)
+            else:
+                console.print(f"[yellow]❓ 未預期的狀態碼: {response.status_code}[/yellow]")
+                console.print(f"[yellow]回應內容: {response.text[:200]}[/yellow]")
+
+            console.print(f"[dim]\n📊 回應標頭: {dict(response.headers)}[/dim]")
+        else:
+            console.print("[green]👌 表單資料已準備好，您可以稍後手動提交。[/green]")
+    else:
+        console.print("[blue]📦 表單資料已生成，請記得自行補上隱藏欄位後再提交。[/blue]")
+
+
+if __name__ == "__main__":
+    run_cli()

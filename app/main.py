@@ -11,7 +11,12 @@ from rich.panel import Panel
 from rich.prompt import Confirm
 from rich.table import Table
 from rich import box
+import dotenv
+import os
 
+
+# 載入環境變數
+dotenv.load_dotenv()
 
 BASE_TIMESHEET_URL = "https://hrwt.iii.org.tw/TSM/MyWorkTime.aspx"
 TIMESHEET_ORIGIN = "https://hrwt.iii.org.tw"
@@ -183,6 +188,7 @@ def get_fresh_form_data(year_month=None, work_times=None):
         "Accept-Encoding": "gzip, deflate, br, zstd",
         "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
         "Cache-Control": "max-age=0",
+        "Authorization": f"Bearer {os.getenv('TEL_BEARER_TOKEN', '')}",
         "Connection": "keep-alive",
         "Host": "hrwt.iii.org.tw",
         "Sec-Fetch-Dest": "document",
@@ -203,6 +209,11 @@ def get_fresh_form_data(year_month=None, work_times=None):
     session.cookies.set('ASP.NET_SessionId', 'ixhecp5h5eyglywk52u4452s', domain='hrwt.iii.org.tw')
     session.cookies.set('clientTicket', 'acecc412-c129-4534-a52b-b5746b307421', domain='hrwt.iii.org.tw')
     session.cookies.set('clientUserName', '970123', domain='hrwt.iii.org.tw')
+    
+    cookies = {
+        "token": os.getenv("TEL_COOKIE_TOKEN", ""),
+    }
+    session.cookies.update(cookies)
     
     target_url = build_timesheet_url(year_month)
     console.print(f"[cyan]正在獲取最新的頁面資料: {target_url}[/cyan]")
@@ -227,6 +238,14 @@ def get_fresh_form_data(year_month=None, work_times=None):
     viewstate = soup.find('input', {'name': '__VIEWSTATE'})
     viewstate_generator = soup.find('input', {'name': '__VIEWSTATEGENERATOR'})
     event_validation = soup.find('input', {'name': '__EVENTVALIDATION'})
+    
+    if not event_validation:
+        event_validation = soup.find('input', {'id': '__EVENTVALIDATION'})
+        if event_validation:
+            console.print("[yellow]⚠️ 注意: 使用了 id 來尋找 __EVENTVALIDATION，可能是頁面結構異常。[/yellow]")
+        else:
+            console.print("[red]❌ 無法找到 __EVENTVALIDATION 欄位。[/red]")
+            event_validation = {'value':'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'}
     
     if not all([viewstate, viewstate_generator, event_validation]):
         console.print("[bold red]❌ 無法找到必要的隱藏欄位，可能需要重新登入[/bold red]")

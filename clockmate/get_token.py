@@ -12,7 +12,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 # LOGIN_URL = "https://tel.iii.org.tw/telbook/"
 LOGIN_URL = "https://hrwt.iii.org.tw"
-ENV_PATH = Path(__file__).resolve().parent / ".env"
+ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 COOKIE_NAMES = {
     "TEL_COOKIE_TOKEN": "token",
     "ASP_NET_SESSION_ID": "ASP.NET_SessionId",
@@ -73,7 +73,23 @@ def wait_for_login(driver: webdriver.Chrome) -> None:
     input("按下 Enter 後開始擷取 Token 與 Cookie ...")
 
     try:
-        WebDriverWait(driver, 180).until(EC.presence_of_element_located((By.ID, "LabHR")))
+        # 嘗試多種可能的元素選擇器
+        conditions = [
+            EC.presence_of_element_located((By.ID, "LabHR")),
+            EC.presence_of_element_located((By.TAG_NAME, "body")),
+            EC.presence_of_element_located((By.CSS_SELECTOR, "[id*='app'], [class*='app'], main, #content")),
+        ]
+        
+        for i, condition in enumerate(conditions):
+            try:
+                WebDriverWait(driver, 10).until(condition)
+                print(f"[成功] 使用條件 {i+1} 偵測到頁面載入完成")
+                break
+            except:
+                if i == len(conditions) - 1:
+                    raise
+                continue
+                
     except Exception:
         print("[提示] 等待頁面載入逾時，仍會嘗試擷取資料。")
         time.sleep(5)

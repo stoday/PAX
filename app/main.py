@@ -206,18 +206,32 @@ def get_fresh_form_data(year_month=None, work_times=None):
     console.print(f"[bold cyan]💻 平台資訊:[/bold cyan] {platform_info}")
     
     # 設定重要的認證 cookies
-    session.cookies.set('ASP.NET_SessionId', 'ixhecp5h5eyglywk52u4452s', domain='hrwt.iii.org.tw')
-    session.cookies.set('clientTicket', 'acecc412-c129-4534-a52b-b5746b307421', domain='hrwt.iii.org.tw')
-    session.cookies.set('clientUserName', '970123', domain='hrwt.iii.org.tw')
+    cookie_values = {
+        'ASP.NET_SessionId': os.getenv("ASP_NET_SESSION_ID", ""),
+        'clientTicket': os.getenv("CLIENT_TICKET", ""),
+        'clientUserName': os.getenv("CLIENT_USERNAME", ""),
+    }
+    missing_cookies = [name for name, value in cookie_values.items() if not value]
+    if missing_cookies:
+        console.print(f"[yellow]⚠️ .env 中缺少 cookie 值: {', '.join(missing_cookies)}，請先執行 get_token.py[/yellow]")
+    else:
+        console.print("[green]✅ 已從 .env 讀取登入 cookie。[/green]")
+
+    for name, value in cookie_values.items():
+        if value:
+            session.cookies.set(name, value, domain='hrwt.iii.org.tw')
     
     cookies = {
         "token": os.getenv("TEL_COOKIE_TOKEN", ""),
     }
+    if not cookies["token"]:
+        console.print("[yellow]⚠️ .env 中缺少 token Cookie，請執行 get_token.py 更新。[/yellow]")
     session.cookies.update(cookies)
     
     target_url = build_timesheet_url(year_month)
     console.print(f"[cyan]正在獲取最新的頁面資料: {target_url}[/cyan]")
     
+    # 發送 GET 請求取得頁面
     response = session.get(target_url, headers=headers)
     
     if response.status_code != 200:

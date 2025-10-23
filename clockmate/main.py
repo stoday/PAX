@@ -360,27 +360,29 @@ def run_cli():
         console.print("[yellow]⚠️ 已取消操作。[/yellow]")
         return
 
-    fetch_hidden = prompt_yes_no("要自動從系統取得最新的隱藏欄位嗎？", True)
+    # fetch_hidden = prompt_yes_no("要自動從系統取得最新的隱藏欄位嗎？", True)
 
-    form_data = None
-    session = None
+    # form_data = None
+    # session = None
 
-    if fetch_hidden:
-        console.print("[cyan]🔍 嘗試從遠端抓取最新表單設定...[/cyan]")
-        form_data, session = get_fresh_form_data(target_year_month, custom_work_times)
-        if not form_data:
-            console.print("[yellow]⚠️ 遠端資料抓取失敗，改用離線方式生成。[/yellow]")
-            form_data = generate_form_data(target_year_month, custom_work_times)
-    else:
-        form_data = generate_form_data(target_year_month, custom_work_times)
+    # if fetch_hidden:
+    #     console.print("[cyan]🔍 嘗試從遠端抓取最新表單設定...[/cyan]")
+    #     form_data, session = get_fresh_form_data(target_year_month, custom_work_times)
+    #     if not form_data:
+    #         console.print("[yellow]⚠️ 遠端資料抓取失敗，改用離線方式生成。[/yellow]")
+    #         form_data = generate_form_data(target_year_month, custom_work_times)
+    # else:
+    #     form_data = generate_form_data(target_year_month, custom_work_times)
 
+    form_data, session = get_fresh_form_data(target_year_month, custom_work_times)
     if not form_data:
         console.print("[bold red]❌ 無法生成表單資料，請稍後再試。[/bold red]")
         return
 
     console.rule("[bold green]表單資料已完成建立[/bold green]")
-    if fetch_hidden and session:
-        if prompt_yes_no("需要立即提交表單嗎？", False):
+    # if fetch_hidden and session:
+    if session:
+        if prompt_yes_no("需要立即提交表單嗎？", True):
             console.rule("[bold magenta]提交表單[/bold magenta]")
             console.print("📝 正在提交表單...")
             post_headers = get_post_headers(target_year_month)

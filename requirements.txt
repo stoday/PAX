@@ -5,3 +5,10 @@ webdriver-manager>=3.8.0
 python-dotenv>=0.19.0
 pyfiglet>=0.8.0
 rich>=12.0.0
+
+# 檔案目錄服務相關依賴
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# SSH 服務器相關依賴
+paramiko>=3.4.0

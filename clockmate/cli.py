@@ -11,7 +11,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "get-token":
         get_tokens_from_browser()
     else:
-        run_cli()
+        run_cli(auto_mode=False)
 
 
 def get_token():

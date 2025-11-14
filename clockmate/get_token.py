@@ -10,8 +10,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
 
 
+LOGIN_URL = "https://eip.iii.org.tw/"
 # LOGIN_URL = "https://tel.iii.org.tw/telbook/"
-LOGIN_URL = "https://hrwt.iii.org.tw"
+# LOGIN_URL = "https://hrwt.iii.org.tw"
+SECOND_URL = "https://hrwt.iii.org.tw"
+
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 COOKIE_NAMES = {
     "TEL_COOKIE_TOKEN": "token",
@@ -70,7 +73,15 @@ def wait_for_login(driver: webdriver.Chrome) -> None:
     driver.get(LOGIN_URL)
     print(f"已開啟登入頁面：{LOGIN_URL}")
     print("請在瀏覽器中手動輸入帳號密碼完成登入後，回到終端機按 Enter 繼續。")
-    input("按下 Enter 後開始擷取 Token 與 Cookie ...")
+    input("按下 Enter 後開始跳轉到下一個頁面...")
+    # 在網址列自動輸入 https://hrwt.iii.org.tw 後自動跳轉
+    current_url = driver.current_url
+    if current_url != LOGIN_URL:
+        print(f"[提示] 偵測到目前網址為 {current_url}，將繼續進行資料擷取。")
+        
+    driver.implicitly_wait(5)
+    driver.get(SECOND_URL)
+    input("按下 Enter 後開始擷取跳轉到後的頁面資料...")
 
     try:
         # 嘗試多種可能的元素選擇器

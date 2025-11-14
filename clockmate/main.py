@@ -328,17 +328,29 @@ def prompt_yes_no(prompt_text, default=True):
     return Confirm.ask(f"[bold white]{prompt_text}[/bold white]", default=default)
 
 
-def run_cli():
+def run_cli(auto_mode:bool=False, 
+            arrival_time="09:00", 
+            leave_time="18:00", 
+            reason="忘刷", 
+            remark=""):
     display_welcome_banner()
     now = datetime.datetime.now()
     default_year_month = f"{now.year}/{now.month:02d}"
 
-    console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值。[/bold]")
-    target_year_month = prompt_with_default("填寫年月 (YYYY/MM)", default_year_month)
-    arrival_time = prompt_with_default("預設上班時間 (HH:MM)", "09:00")
-    leave_time = prompt_with_default("預設下班時間 (HH:MM)", "18:00")
-    reason = prompt_with_default("預設原因", "忘刷")
-    remark = console.input("[bold white]預設備註 (可留空)[/bold white]: ").strip()
+    if auto_mode == False:
+        console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值。[/bold]")
+        target_year_month = prompt_with_default("填寫年月 (YYYY/MM)", default_year_month)
+        arrival_time = prompt_with_default("預設上班時間 (HH:MM)", "09:00")
+        leave_time = prompt_with_default("預設下班時間 (HH:MM)", "18:00")
+        reason = prompt_with_default("預設原因", "忘刷")
+        remark = console.input("[bold white]預設備註 (可留空)[/bold white]: ").strip()
+    else:
+        console.print("[bold]自動模式啟用，使用預設工時資料。[/bold]")
+        target_year_month = default_year_month
+        arrival_time = "09:00"
+        leave_time = "18:00"
+        reason = "忘刷"
+        remark = ""
 
     custom_work_times = {
         'arrival_time': arrival_time,

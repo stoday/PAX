@@ -1,3 +1,16 @@
+.env
+.venv*
+.gitignore
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+.idea/
+node_modules/
+dist/
+build/
+*.pem
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

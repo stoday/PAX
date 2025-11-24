@@ -25,7 +25,7 @@
 
 2. Serve it over SSH:
    ```bash
-   termlit run clockmatelink.py --host 0.0.0.0 --port 2222
+   termlit run clockmate_entry.py --host 0.0.0.0 --port 2222
    ```
    > 加上 `--auth none` 可讓使用者免密碼登入（預設為 `--auth ssh` 需輸入密碼）。
 3. Connect from any SSH client (default credentials `admin/password123`):

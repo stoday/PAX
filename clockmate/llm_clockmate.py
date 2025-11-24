@@ -2,15 +2,10 @@ import datetime
 import json
 import re
 from typing import Dict, Tuple, List, Any, Union
-import akasha
+from multiprocessing import Process, Manager
 
-"""
-待解問題:
-1. 除錯
-2. 無法處理跨月打卡
-3. 接上ssh
-4. push到github
-"""
+
+import akasha
 
 def get_weekend():
     """
@@ -36,15 +31,15 @@ def prompt_create(user_message = ""):
     高優先級指令：內容檢查
     1.  優先判斷{user_message} 是否與「上下班時間」、「出勤記錄」、「工時資訊」、「打卡/刷卡」、「請假/公出/受訓」等主題相關。
     2.  如果{user_message}被判定為「無關」（例如：問天氣、閒聊、抱怨，請立刻停止執行所有後續指令，並且"只輸出"以下單一 JSON 對象：
-    {{"message": "I'm sorry, but I cannot assist with that request."}}
+    {{"message":"I'm sorry, but I cannot assist with that request."}}
 
     如果內容被判定為「相關」，則繼續執行以下指令：
     請只輸出 Dict，不輸出多餘文字。
     將每日的上下班時間、未打卡事由、備註等資訊整理成 Dict 格式。
     {date_prompt}
     若{user_message}=""則填入預設值arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark=""。
-    當例假日時，{{MM-DD : {{"arrival_time": "","leave_time": "","reason": "","remark": ""}},...}}
-    當有混合工作、公出、受訓的情況，則在reason中輸入{{MM-DD : {{"arrival_time": "HH:MM","leave_time": "HH:MM","reason": "文字","remark": "文字"}},...}}
+    當例假日時，{{MM-DD:{{"arrival_time":"","leave_time":"","reason":"","remark":""}},...}}
+    當有混合工作、公出、受訓的情況，則在reason中輸入{{MM-DD:{{"arrival_time":"HH:MM","leave_time":"HH:MM","reason":"文字","remark":"文字"}},...}}
     """
     return user_prompt
 
@@ -53,7 +48,7 @@ def get_per_day_work_times_by_llm(
         user_prompt: str = "",
         info: str = "",
     ):
-    ak = akasha.ask(model=model, max_input_tokens=8000, max_output_tokens=20000, keep_logs=True, verbose=True)
+    ak = akasha.ask(model=model, max_input_tokens=8000, max_output_tokens=20000)
     res = ak(prompt=user_prompt,info=[info])
     return res
 
@@ -121,20 +116,28 @@ def validate_llm_json(parsed: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Dict
     return True, "", result
 
 def _clean_and_parse(raw_text: str) -> Tuple[bool, Dict[str, Any]]:
-    """移除 code fence 並嘗試解析為 JSON 物件(dict)。
+    """移除 code fence、多餘空白換行，並嘗試解析為 JSON 物件(dict)。
 
     流程：
-    1) 嚴格 json.loads 嘗試
-    2) 失敗則做一次單引號→雙引號替換再嘗試
+    1) 移除 code fence
+    2) 移除 JSON 內容中的換行與 tab
+    3) 移除 JSON key-value 分隔符號(:)後的空白
+    4) 嚴格 json.loads 嘗試
+    5) 失敗則做一次單引號→雙引號替換再嘗試
     """
     cleaned = raw_text.strip()
     if "```" in cleaned:
         parts = cleaned.split("```")
         if len(parts) >= 3:
             mid = parts[1]
+            # 移除 optional language specifier, e.g., "json"
             if "\n" in mid:
                 mid = "\n".join(mid.split("\n")[1:])
             cleaned = mid.strip()
+
+    # 移除 JSON 字串內部的換行、tab、以及冒號後的空白
+    cleaned = re.sub(r'[\n\t]', '', cleaned)
+    cleaned = re.sub(r':\s+', ':', cleaned)
     try:
         parsed = json.loads(cleaned)
         if isinstance(parsed, dict):
@@ -158,6 +161,7 @@ def parse_llm_output(raw_text: str) -> Union[str, Dict[str, Dict[str, str]]]:
     - 否則執行格式驗證，通過則回傳日期→工時的 dict，失敗則拋出 ValueError。
     """
     ok_parse, parsed = _clean_and_parse(raw_text)
+    print(parsed)
     if not ok_parse:
         return "JSON 解析失敗或根節點非物件"
 
@@ -172,11 +176,22 @@ def parse_llm_output(raw_text: str) -> Union[str, Dict[str, Dict[str, str]]]:
     return data
 
 if __name__ == "__main__":
+    import argparse
+
+    # parser = argparse.ArgumentParser(description="llm_clockmate CLI")
+    # parser.add_argument("--user-message", "-m", dest="user_message", required=True,
+                        # help="Message from the user")
+    # add any other args your script needs...
+    # args = parser.parse_args()
+
+    # Ensure the variable expected by the rest of the script exists:
+    # user_message = args.user_message
     user_message = ""
     user_prompt = prompt_create(user_message=user_message)
     res = get_per_day_work_times_by_llm(user_prompt=user_prompt)
-    print("\n原始模型回應：\n", res)
     parsed_or_msg = parse_llm_output(res)
+    print(parsed_or_msg)
+    """
     if isinstance(parsed_or_msg, str):
         print("🔔 訊息/錯誤：", parsed_or_msg)
     else:
@@ -185,3 +200,4 @@ if __name__ == "__main__":
         items = list(parsed_or_msg.items())[:3]
         for k, v in items:
             print(f"  {k}: {v}")
+            """

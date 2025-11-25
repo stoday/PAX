@@ -164,14 +164,15 @@ def run_llm_cli():
 
     console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值。[/bold]")
     user_message = prompt_with_default("填寫本月出勤狀況", "")
-    # user_prompt = prompt_create(user_message=user_message)
+    user_prompt = prompt_create(user_message=user_message)
 
     # 定義 MCP 伺服器連接資訊
     import sys
     connection_info = {
         "math": {
             "command": sys.executable,  # 使用當前 env 的 python
-            "args": ["-u", "clockmate\llm_clockmate.py", "--mcp-stdio"],
+            "args": ["-u", "clockmate\llm_clockmate.py"],
+            # "args": ["-u", "clockmate\llm_clockmate.py", "--mcp-stdio"],
             "transport": "stdio",
         },
     }
@@ -181,12 +182,12 @@ def run_llm_cli():
         model="gemini:gemini-2.5-flash",
         temperature=1.0,
     )
-    response = agent.mcp_agent(connection_info, "使用llm_clockmate.py取得工時資料")
+    response = agent.mcp_agent(connection_info, "使用llm_clockmate取得工時資料")
+    parsed_or_msg = parse_llm_output(response)
 
     # custom_work_times = get_per_day_work_times_by_llm(user_prompt=user_prompt)
     # parsed_or_msg = parse_llm_output(custom_work_times)
 
-    parsed_or_msg = parse_llm_output(response)
     if isinstance(parsed_or_msg, str):
         console.print(f"[yellow]I'm sorry, but I cannot assist with that request.{parsed_or_msg}[/yellow]")
         return

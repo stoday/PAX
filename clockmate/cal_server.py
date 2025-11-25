@@ -1,7 +1,7 @@
 # cal_server.py
 from mcp.server.fastmcp import FastMCP  # noqa: E402
 
-mcp = FastMCP("Math")
+mcp = FastMCP("math", port=8001)
 
 
 @mcp.tool()
@@ -17,4 +17,4 @@ def multiply(a: int, b: int) -> int:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
+    mcp.run(transport="sse")

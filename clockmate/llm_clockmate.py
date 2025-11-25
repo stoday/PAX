@@ -2,10 +2,14 @@ import datetime
 import json
 import re
 from typing import Dict, Tuple, List, Any, Union
-from multiprocessing import Process, Manager
-
 
 import akasha
+
+import dotenv
+dotenv.load_dotenv()
+from mcp.server.fastmcp import FastMCP  # noqa: E402
+mcp = FastMCP("get_per_day_work_times_by_llm", port=8001)
+
 
 def get_weekend():
     """
@@ -43,11 +47,16 @@ def prompt_create(user_message = ""):
     """
     return user_prompt
 
+@mcp.tool()
 def get_per_day_work_times_by_llm(
         model: str = "gemini:gemini-2.5-flash",
         user_prompt: str = "",
         info: str = "",
     ):
+    import dotenv
+    dotenv.load_dotenv()
+    user_prompt = prompt_create()
+    model = "gemini:gemini-2.5-flash"
     ak = akasha.ask(model=model, max_input_tokens=8000, max_output_tokens=20000)
     res = ak(prompt=user_prompt,info=[info])
     return res
@@ -176,22 +185,15 @@ def parse_llm_output(raw_text: str) -> Union[str, Dict[str, Dict[str, str]]]:
     return data
 
 if __name__ == "__main__":
-    import argparse
+    mcp.run(transport="sse")
 
-    # parser = argparse.ArgumentParser(description="llm_clockmate CLI")
-    # parser.add_argument("--user-message", "-m", dest="user_message", required=True,
-                        # help="Message from the user")
-    # add any other args your script needs...
-    # args = parser.parse_args()
-
-    # Ensure the variable expected by the rest of the script exists:
-    # user_message = args.user_message
+    """
     user_message = ""
     user_prompt = prompt_create(user_message=user_message)
     res = get_per_day_work_times_by_llm(user_prompt=user_prompt)
     parsed_or_msg = parse_llm_output(res)
     print(parsed_or_msg)
-    """
+    
     if isinstance(parsed_or_msg, str):
         print("🔔 訊息/錯誤：", parsed_or_msg)
     else:
@@ -200,4 +202,4 @@ if __name__ == "__main__":
         items = list(parsed_or_msg.items())[:3]
         for k, v in items:
             print(f"  {k}: {v}")
-            """
+    """

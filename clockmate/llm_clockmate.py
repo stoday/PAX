@@ -13,37 +13,45 @@ mcp = FastMCP("get_per_day_work_times_by_llm", port=8001)
 
 def get_weekend():
     """
-    取得當月所有週六、週日，回傳為字串清單（格式 MM-DD）。
-    範例：['11-01', '11-02', ...]
+    取得當月所有週六、週日，回傳為以逗號分隔的字串（每個為 MM-DD）。
+    範例："11-01,11-02,..."
     """
     today = datetime.date.today()
     year, month = today.year, today.month
 
-    weekends = []
+    weekends = ""
     # 僅處理從月初到今天（含今天）
     last_day = today.day
     for day in range(1, last_day + 1):
         d = datetime.date(year, month, day)
         if d.weekday() >= 5:  # 5=Saturday, 6=Sunday
-            weekends.append(f"{month:02d}-{day:02d}")
+            weekends += f"{month:02d}-{day:02d},"
     return year, month, today, weekends
 
 def prompt_create(user_message = ""):
     year, month, today, weekends = get_weekend()
-    date_prompt = f"從'{year}-{month}-01'到'{today}'的工時，其中{weekends}為例假日"
+    date_prompt = f"今天是:{today}，請填寫從'{year}-{month}-01'到今天的工時，其中\{weekends}\為例假日"
     user_prompt = f"""
-    高優先級指令：內容檢查
-    1.  優先判斷{user_message} 是否與「上下班時間」、「出勤記錄」、「工時資訊」、「打卡/刷卡」、「請假/公出/受訓」等主題相關。
-    2.  如果{user_message}被判定為「無關」（例如：問天氣、閒聊、抱怨，請立刻停止執行所有後續指令，並且"只輸出"以下單一 JSON 對象：
-    {{"message":"I'm sorry, but I cannot assist with that request."}}
-
+    最高優先級指令：嚴格檢查使用者訊息"{user_message}"
+    1.優先判斷，若使用者訊息為空字串，則直接判斷為相關
+    2.其次判斷使用者訊息是否與「上下班時間」、「未打卡原因」、「混合工作/公出/受訓」等無關(僅字面提及也不算(如混合工作好爽、受訓好累、不想公出))。
+    3.如果使用者訊息被判定為「無關」、「未提及」請立刻停止執行所有後續指令，並且"只輸出"以下單一 JSON 對象：
+    \{{"message":"I'm sorry, but I cannot assist with that request."\}}
     如果內容被判定為「相關」，則繼續執行以下指令：
-    請只輸出 Dict，不輸出多餘文字。
-    將每日的上下班時間、未打卡事由、備註等資訊整理成 Dict 格式。
+    請只輸出 JSON，不輸出多餘文字。
+    優先根據使用者訊息的要求，將每日的上下班時間、未打卡事由、備註等資訊整理成 JSON 格式。
     {date_prompt}
-    若{user_message}=""則填入預設值arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark=""。
-    當例假日時，{{MM-DD:{{"arrival_time":"","leave_time":"","reason":"","remark":""}},...}}
-    當有混合工作、公出、受訓的情況，則在reason中輸入{{MM-DD:{{"arrival_time":"HH:MM","leave_time":"HH:MM","reason":"文字","remark":"文字"}},...}}
+    當例假日時，\{{MM-DD:\{{"arrival_time":"","leave_time":"","reason":"","remark":""\}},...\}}
+    當使用者訊息有混合工作、公出、受訓的情況，則在reason中輸入\{{MM-DD:\{{"arrival_time":"HH:MM","leave_time":"HH:MM","reason":"混合工作/公出/受訓","remark":""\}},...\}}
+    其他未提及的日期則填入預設值\{{arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark=""\}}
+    """
+    """
+    以下進行範例:
+    1.
+    2.
+    3.
+    4.
+    5.
     """
     return user_prompt
 
@@ -58,11 +66,10 @@ def get_per_day_work_times_by_llm(
     user_prompt = prompt_create()
     model = "gemini:gemini-2.5-flash"
     ak = akasha.ask(model=model, max_input_tokens=8000, max_output_tokens=20000)
-    res = ak(prompt=user_prompt,info=[info])
+    res = ak(prompt=user_prompt)
     return res
 
 TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
-DATE_KEY_PATTERN = re.compile(r"^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$")
 
 def validate_llm_json(parsed: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Dict[str, str]]]:
     """
@@ -80,24 +87,7 @@ def validate_llm_json(parsed: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Dict
     required_fields = ["arrival_time", "leave_time", "reason", "remark"]
     result: Dict[str, Dict[str, str]] = {}
 
-    today = datetime.date.today()
-    current_year = today.year
     for date_key, payload in parsed.items():
-        # 日期鍵必須是 MM-DD 格式
-        if not DATE_KEY_PATTERN.match(date_key):
-            return False, f"日期鍵格式錯誤(需 MM-DD): {date_key}", {}
-        month_part = int(date_key[:2])
-        day_part = int(date_key[3:])
-        # 驗證日是否在該月份合法範圍
-        try:
-            _, max_day = datetime.datetime(current_year, month_part, 1).replace(day=1).timetuple()[:2]  # dummy usage
-            # 正確取得月天數
-            import calendar as _cal
-            max_day = _cal.monthrange(current_year, month_part)[1]
-        except Exception:
-            return False, f"月份不合法: {date_key}", {}
-        if day_part < 1 or day_part > max_day:
-            return False, f"日期不合法: {date_key}", {}
         if not isinstance(payload, dict):
             return False, f"日期 {date_key} 的值不是 dict", {}
 
@@ -151,7 +141,7 @@ def _clean_and_parse(raw_text: str) -> Tuple[bool, Dict[str, Any]]:
         parsed = json.loads(cleaned)
         if isinstance(parsed, dict):
             return True, parsed
-        return False, {}
+        return False, raw_text
     except Exception:
         # 寬鬆處理：嘗試將單引號替換為雙引號再解析
         try:
@@ -159,9 +149,9 @@ def _clean_and_parse(raw_text: str) -> Tuple[bool, Dict[str, Any]]:
             parsed = json.loads(alt)
             if isinstance(parsed, dict):
                 return True, parsed
-            return False, {}
+            return False, raw_text
         except Exception:
-            return False, {}
+            return False, raw_text
 
 def parse_llm_output(raw_text: str) -> Union[str, Dict[str, Dict[str, str]]]:
     """

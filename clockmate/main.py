@@ -14,6 +14,7 @@ import dotenv
 import os
 
 import akasha
+MODEL = "gemini:gemini-2.5-flash"
 try:
     from .llm_clockmate import prompt_create, parse_llm_output
 except:
@@ -167,22 +168,28 @@ def run_llm_cli():
     user_prompt = prompt_create(user_message=user_message)
 
     # 定義 MCP 伺服器連接資訊
-    import sys
     connection_info = {
-        "math": {
-            "command": sys.executable,  # 使用當前 env 的 python
-            "args": ["-u", "clockmate\llm_clockmate.py"],
-            # "args": ["-u", "clockmate\llm_clockmate.py", "--mcp-stdio"],
-            "transport": "stdio",
-        },
+        "get_per_day_work_times_by_llm": {
+            # the first arg is the path of your python file
+            "url": "http://localhost:8001/sse",
+            "transport": "sse",
+        },    
+        # "math": {
+            # "command": "python",
+            # the first arg is the path of your python file
+            # "args": ["cal_server.py"],
+            # "transport": "stdio",
+        # },
     }
 
-    # 使用 MCP 工具
     agent = akasha.agents(
-        model="gemini:gemini-2.5-flash",
-        temperature=1.0,
+        model=MODEL,
+        temperature=0.01,
+        verbose=True,
+        keep_logs=True,
+        max_output_tokens=10000
     )
-    response = agent.mcp_agent(connection_info, "使用llm_clockmate取得工時資料")
+    response = agent.mcp_agent(connection_info, user_prompt)
     parsed_or_msg = parse_llm_output(response)
 
     # custom_work_times = get_per_day_work_times_by_llm(user_prompt=user_prompt)

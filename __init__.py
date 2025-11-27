@@ -9,11 +9,11 @@ __email__ = "support@clockmate.com"
 
 # 延遲匯入避免循環依賴
 def run_cli():
-    from .main import run_cli as _run_cli
+    from .main import run_llm_cli as _run_cli
     return _run_cli()
 
 def get_tokens_from_browser():
     from .get_token import get_tokens_from_browser as _get_tokens
     return _get_tokens()
 
-__all__ = ['run_cli', 'get_tokens_from_browser']
+__all__ = ['run_llm_cli', 'get_tokens_from_browser']

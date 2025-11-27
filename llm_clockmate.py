@@ -53,8 +53,6 @@ def get_per_day_work_times_by_llm(
         user_prompt: str = "",
         info: str = "",
     ):
-    import dotenv
-    dotenv.load_dotenv()
     user_prompt = prompt_create()
     model = "gemini:gemini-2.5-flash"
     ak = akasha.ask(model=model, max_input_tokens=8000, max_output_tokens=20000)

@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clockmate"
+version = "1.0.0"
+description = "工時填報自動化助手"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "ClockMate Team", email = "support@clockmate.com"},
+]
+keywords = ["timesheet", "automation", "hr"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "requests>=2.25.0",
+    "beautifulsoup4>=4.9.0",
+    "selenium>=4.0.0",
+    "webdriver-manager>=3.8.0",
+    "python-dotenv>=0.19.0",
+    "pyfiglet>=0.8.0",
+    "rich>=12.0.0",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "paramiko>=3.4.0",
+]
+
+[project.urls]
+Homepage = "https://gitlab.com/your-username/clockmate"
+Repository = "https://gitlab.com/your-username/clockmate.git"
+Issues = "https://gitlab.com/your-username/clockmate/-/issues"
+
+[project.scripts]
+clockmate = "clockmate.cli:main"
+clockmate-token = "clockmate.cli:get_token"

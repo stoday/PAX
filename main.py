@@ -28,6 +28,10 @@ TIMESHEET_ORIGIN = "https://hrwt.iii.org.tw"
 console = Console()
 figlet = Figlet(font="slant")
 
+# 可選的 I/O 掛勾（供 SSH 路徑覆寫互動輸入確認）
+INPUT_FUNC = None  # Callable[[str, object], str]
+CONFIRM_FUNC = None  # Callable[[str, bool], bool]
+
 
 def build_timesheet_url(year_month=None):
     """Construct the timesheet URL optionally bound to a specific year/month."""
@@ -205,33 +209,78 @@ def get_post_headers(year_month=None):
         "sec-ch-ua-platform": platform_info
     }
 
-def display_welcome_banner():
+def display_welcome_banner(plain: bool = False):
     ascii_banner = figlet.renderText("ClockMate")
-    panel = Panel.fit(
-        ascii_banner.rstrip(),
-        border_style="cyan",
-        title="ClockMate 工時小幫手",
-        # subtitle="填報助手",
-        style="bold magenta",
-    )
-    console.print(panel)
+    if plain:
+        # 避免使用 Rich Panel/框線等 Unicode，簡單輸出
+        console.print(ascii_banner.rstrip())
+        console.print("ClockMate 工時小幫手")
+        # console.print("開始設定")
+    else:
+        panel = Panel.fit(
+            ascii_banner.rstrip(),
+            border_style="cyan",
+            title="ClockMate 工時小幫手",
+            # subtitle="填報助手",
+            style="bold magenta",
+        )
+        console.print(panel)
     # console.rule("[bold cyan]開始設定[/bold cyan]")
 
 
 def prompt_with_default(prompt_text, default_value=None):
+    # 若有自訂輸入掛勾，使用簡單文字提示
+    if default_value is not None:
+        prompt_plain = f"{prompt_text} [{default_value}]: "
+    else:
+        prompt_plain = f"{prompt_text}: "
+    if INPUT_FUNC:
+        try:
+            val = INPUT_FUNC(prompt_plain, default_value)
+        except Exception:
+            val = ""
+        return (val or default_value) if default_value is not None else (val or "")
+    # 預設走 Rich 樣式
     if default_value:
         prompt = f"[bold white]{prompt_text}[/bold white] [[cyan]{default_value}[/cyan]]: "
     else:
         prompt = f"[bold white]{prompt_text}[/bold white]: "
     user_input = console.input(prompt).strip()
-    return user_input or default_value
+    return user_input or (default_value if default_value is not None else "")
 
 
 def prompt_yes_no(prompt_text, default=True):
+    if CONFIRM_FUNC:
+        try:
+            return CONFIRM_FUNC(prompt_text, default)
+        except Exception:
+            return default
     return Confirm.ask(f"[bold white]{prompt_text}[/bold white]", default=default)
 
-def run_llm_cli(mode="local"):
-    display_welcome_banner()
+def set_output_stream(stream):
+    """Set a custom stream for Rich console output.
+    Provide an object with a `.write(str)` method.
+    """
+    global console
+    try:
+        console = Console(file=stream, force_terminal=True, no_color=True, soft_wrap=False)
+    except Exception:
+        # Fallback to default console if stream invalid
+        console = Console()
+
+def set_io_hooks(input_func=None, confirm_func=None):
+    """設定互動 I/O 掛勾（SSH 模式可覆寫輸入/確認）。"""
+    global INPUT_FUNC, CONFIRM_FUNC
+    INPUT_FUNC = input_func
+    CONFIRM_FUNC = confirm_func
+
+def run_llm_cli(mode="manual", output_stream=None):
+    # If a custom output stream is provided, rebind console to it
+    if output_stream is not None:
+        set_output_stream(output_stream)
+    # 若是 SSH 環境，顯示純文字 banner，避免亂碼
+    plain = getattr(getattr(console, 'file', None), 'is_plain', False)
+    display_welcome_banner(plain=plain)
     now = datetime.datetime.now()
     target_year_month = f"{now.year}/{now.month:02d}"
     if mode == "llm":
@@ -264,13 +313,13 @@ def run_llm_cli(mode="local"):
             console.print("[yellow]工時正確生成.[/yellow]")
 
         final_work_time = parsed_or_msg
-    elif mode == "local":
+    elif mode == "manual":
         console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值。[/bold]")
         target_year_month = prompt_with_default("填寫年月 (YYYY/MM)", target_year_month)
         arrival_time = prompt_with_default("預設上班時間 (HH:MM)", "09:00")
         leave_time = prompt_with_default("預設下班時間 (HH:MM)", "18:00")
         reason = prompt_with_default("預設原因", "忘刷")
-        remark = console.input("[bold white]預設備註 (可留空)[/bold white]: ").strip()
+        remark = prompt_with_default("預設備註 (可留空)", "").strip()
 
         custom_work_times = {
             'arrival_time': arrival_time,

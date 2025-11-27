@@ -8,7 +8,7 @@ import akasha
 import dotenv
 dotenv.load_dotenv()
 from mcp.server.fastmcp import FastMCP  # noqa: E402
-mcp = FastMCP("get_per_day_work_times_by_llm", port=8001)
+mcp = FastMCP("get_per_day_work_times_by_llm")
 
 
 def get_weekend():
@@ -44,14 +44,6 @@ def prompt_create(user_message = ""):
     當例假日時，\{{MM-DD:\{{"arrival_time":"","leave_time":"","reason":"","remark":""\}},...\}}
     當使用者訊息有混合工作、公出、受訓的情況，則在reason中輸入\{{MM-DD:\{{"arrival_time":"HH:MM","leave_time":"HH:MM","reason":"混合工作/公出/受訓","remark":""\}},...\}}
     其他未提及的日期則填入預設值\{{arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark=""\}}
-    """
-    """
-    以下進行範例:
-    1.
-    2.
-    3.
-    4.
-    5.
     """
     return user_prompt
 
@@ -175,21 +167,4 @@ def parse_llm_output(raw_text: str) -> Union[str, Dict[str, Dict[str, str]]]:
     return data
 
 if __name__ == "__main__":
-    mcp.run(transport="sse")
-
-    """
-    user_message = ""
-    user_prompt = prompt_create(user_message=user_message)
-    res = get_per_day_work_times_by_llm(user_prompt=user_prompt)
-    parsed_or_msg = parse_llm_output(res)
-    print(parsed_or_msg)
-    
-    if isinstance(parsed_or_msg, str):
-        print("🔔 訊息/錯誤：", parsed_or_msg)
-    else:
-        print("✅ 驗證通過，筆數：", len(parsed_or_msg))
-        # 範例顯示前 3 筆
-        items = list(parsed_or_msg.items())[:3]
-        for k, v in items:
-            print(f"  {k}: {v}")
-    """
+    mcp.run(transport="stdio")

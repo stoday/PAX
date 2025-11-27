@@ -12,3 +12,6 @@ uvicorn[standard]>=0.24.0
 
 # SSH 服務器相關依賴
 paramiko>=3.4.0
+
+akasha-terminal=0.9.13
+dotenv

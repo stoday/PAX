@@ -150,7 +150,6 @@ def parse_llm_output(raw_text: str) -> Union[str, Dict[str, Dict[str, str]]]:
     - 否則執行格式驗證，通過則回傳日期→工時的 dict，失敗則拋出 ValueError。
     """
     ok_parse, parsed = _clean_and_parse(raw_text)
-    print(parsed)
     if not ok_parse:
         return "JSON 解析失敗或根節點非物件"
 

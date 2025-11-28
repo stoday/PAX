@@ -1,7 +1,6 @@
 """
 ClockMate CLI 命令列介面
 """
-from main import run_llm_cli
 from get_token import get_tokens_from_browser
 import argparse
 
@@ -11,11 +10,8 @@ def _start_ssh_server(host: str, port: int, fastapi_url: str):
     server = SSHServer(host=host, port=port, fastapi_url=fastapi_url)
     server.start()
 
-# Replace or import these in your real project
 VALID_MODES = ["manual", "llm"]
-VALID_SERVERS = ["local", "ssh"]
 DEFAULT_MODE = "llm"
-DEFAULT_SERVER = "ssh"
 
 def main():
     """主要的 CLI 入口點"""
@@ -30,12 +26,6 @@ def main():
         choices=VALID_MODES,
         default=DEFAULT_MODE,
         help=f"要使用的運行模式，預設為 '{DEFAULT_MODE}'。可用值: {', '.join(VALID_MODES)}."
-    )
-    parser.add_argument(
-        "-t", "--target",
-        choices=VALID_SERVERS,
-        default=DEFAULT_SERVER,
-        help=f"選擇執行環境（'local' 或 'ssh'），預設為 '{DEFAULT_SERVER}'。"
     )
     parser.add_argument(
         "--get-token",
@@ -67,13 +57,9 @@ def main():
         get_tokens_from_browser()
         return
 
-    # 按照 --target：未指定則 local；指定為 server 則啟動 SSH 伺服器
-    if args.target == "ssh":
-        _start_ssh_server(args.ssh_host, args.ssh_port, args.fastapi_url)
-        return
-
-    # 在本機直接執行
-    run_llm_cli(mode=args.mode.lower())
+    # 固定啟動 SSH 伺服器
+    _start_ssh_server(args.ssh_host, args.ssh_port, args.fastapi_url)
+    return
 
 def get_token():
     """取得 Token 的 CLI 入口點"""

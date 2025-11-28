@@ -20,13 +20,27 @@ pip install -e .
 
 ### 1. 取得登入憑證
 ```bash
-~~clockmate~~-token
+python start_services.py
 ```
 
-### 2. 執行工時填報
+### 2. 使用者
+
+#### 1.確認ssh server已開啟後進行連線
 ```bash
-clockmate
+ssh admin@127.0.0.1 -p 2222
 ```
+
+#### 2.輸入密碼
+```bash
+password123
+```
+#### 3.待看到成功連線畫面後執行Clockmate
+```bash
+clockmate 
+```
+預設為使用大型語言模型模式 可在指令後加上 `-m manual` 或 `--mode manual` 設為手動模式
+
+#### 4.看到Clockmate介面後，即可直接輸入出勤狀況
 
 ## 功能特色
 

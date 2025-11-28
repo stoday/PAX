@@ -210,22 +210,16 @@ def get_post_headers(year_month=None):
     }
 
 def display_welcome_banner(plain: bool = False):
+    console.print("\r\n")
+
     ascii_banner = figlet.renderText("ClockMate")
-    if plain:
-        # 避免使用 Rich Panel/框線等 Unicode，簡單輸出
-        console.print(ascii_banner.rstrip())
-        console.print("ClockMate 工時小幫手")
-        # console.print("開始設定")
-    else:
-        panel = Panel.fit(
-            ascii_banner.rstrip(),
-            border_style="cyan",
-            title="ClockMate 工時小幫手",
-            # subtitle="填報助手",
-            style="bold magenta",
-        )
-        console.print(panel)
-    # console.rule("[bold cyan]開始設定[/bold cyan]")
+    panel = Panel.fit(
+        ascii_banner.rstrip(),
+        border_style="cyan",
+        title="ClockMate 工時小幫手",
+        style="bold magenta",
+    )
+    console.print(panel)
 
 
 def prompt_with_default(prompt_text, default_value=None):
@@ -240,7 +234,7 @@ def prompt_with_default(prompt_text, default_value=None):
         except Exception:
             val = ""
         return (val or default_value) if default_value is not None else (val or "")
-    # 預設走 Rich 樣式
+    # 始終使用 Rich 標記以確保渲染樣式
     if default_value:
         prompt = f"[bold white]{prompt_text}[/bold white] [[cyan]{default_value}[/cyan]]: "
     else:
@@ -263,7 +257,14 @@ def set_output_stream(stream):
     """
     global console
     try:
-        console = Console(file=stream, force_terminal=True, no_color=True, soft_wrap=False)
+        # 啟用 ANSI 顏色與樣式並強制解析 Rich 標記
+        console = Console(
+            file=stream,
+            force_terminal=True,
+            no_color=False,
+            soft_wrap=False,
+            markup=True,
+        )
     except Exception:
         # Fallback to default console if stream invalid
         console = Console()
@@ -278,9 +279,8 @@ def run_llm_cli(mode="manual", output_stream=None):
     # If a custom output stream is provided, rebind console to it
     if output_stream is not None:
         set_output_stream(output_stream)
-    # 若是 SSH 環境，顯示純文字 banner，避免亂碼
-    plain = getattr(getattr(console, 'file', None), 'is_plain', False)
-    display_welcome_banner(plain=plain)
+    # 顯示 Rich 渲染的 banner
+    display_welcome_banner(plain=False)
     now = datetime.datetime.now()
     target_year_month = f"{now.year}/{now.month:02d}"
     if mode == "llm":
@@ -299,8 +299,8 @@ def run_llm_cli(mode="manual", output_stream=None):
         agent = akasha.agents(
             model=MODEL,
             temperature=0.01,
-            verbose=True,
-            keep_logs=True,
+            verbose=False,
+            keep_logs=False,
             max_output_tokens=10000
         )
         response = agent.mcp_agent(connection_info, user_prompt)

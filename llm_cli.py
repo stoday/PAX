@@ -17,7 +17,7 @@ def main():
     """主要的 CLI 入口點"""
     parser = argparse.ArgumentParser(
         prog="clockmate",
-        description="ClockMate CLI - 選擇在本機或透過 SSH 啟動工時助手；或取得 token。"
+        description="ClockMate CLI 或取得 token。"
     )
 
     # 共同參數

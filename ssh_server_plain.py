@@ -76,6 +76,8 @@ class SSHShell(paramiko.ServerInterface):
             return
         prompt = self.username + "@fileserver:" + self.current_path + "$ "
         try:
+            # 先換行再顯示提示符，避免與上一行黏在一起
+            self.channel.send(b"\r\n")
             self.channel.send(prompt.encode('ascii', errors='ignore'))
         except:
             pass
@@ -84,15 +86,11 @@ class SSHShell(paramiko.ServerInterface):
         """安全地發送訊息 - 清理所有隱藏字符"""
         if self.channel and not self.channel.closed:
             try:
-                import re
-                # 移除所有可能的問題字符，只保留基本字符
-                clean_message = re.sub(r'[^\x20-\x7E\n\r\t]', '', str(message))
-                
-                # 確保結尾有換行
-                if not clean_message.endswith('\n'):
-                    clean_message += '\n'
-                
-                self.channel.send(clean_message.encode('ascii', errors='ignore'))
+                # 允許 ANSI 控制序列 (顏色/樣式)；僅規範換行為 CRLF
+                text = str(message)
+                text = text.replace('\r\n', '\n').replace('\r', '\n').replace('\n', '\r\n')
+                # 直接以 UTF-8 發送，保留 ESC (\x1b) 等序列
+                self.channel.send(text.encode('utf-8', errors='ignore'))
             except Exception as e:
                 print(f"發送訊息失敗: {e}")
     
@@ -106,7 +104,7 @@ class SSHShell(paramiko.ServerInterface):
             self.show_welcome()
 
             # 進入互動式 shell，提供 clockmate 指令
-            self.safe_send("輸入 'help' 或 'clockmate --mode llm|manaul --target local|ssh'")
+            self.safe_send("輸入 'help' 或 'clockmate --mode llm'")
             buffer = ""
             self.send_prompt()
             while True:
@@ -213,10 +211,9 @@ class SSHShell(paramiko.ServerInterface):
             if cmd == 'help':
                 self.show_help()
             elif cmd == 'clockmate':
-                # 支援參數: --mode/-m, --target/-t
+                # 支援參數: --mode/-m（預設 llm）
                 import shlex
-                mode = 'manaul'
-                target = 'local'
+                mode = 'llm'
                 try:
                     tokens = shlex.split(command)
                 except Exception:
@@ -228,21 +225,12 @@ class SSHShell(paramiko.ServerInterface):
                         mode = tokens[i+1].lower()
                         i += 2
                         continue
-                    if tok in ('--target', '-t') and i + 1 < len(tokens):
-                        target = tokens[i+1].lower()
-                        i += 2
-                        continue
                     i += 1
 
-                # 僅接受 llm 或 manaul
-                if mode not in ('llm', 'manaul'):
-                    self.safe_send("mode 僅支援 'llm' 或 'manaul'")
+                # 僅接受 llm 或 manual
+                if mode not in ('llm', 'manual'):
+                    self.safe_send("mode 僅支援 'llm' 或 'manual'")
                     return
-                if target not in ('local', 'ssh'):
-                    self.safe_send("target 僅支援 'local' 或 'ssh'")
-                    return
-                if target == 'ssh':
-                    self.safe_send("目前已在 SSH 會話中，將以 local 執行 clockmate。")
                 self.run_clockmate(mode)
             elif cmd in ['ls', 'dir']:
                 path = parts[1] if len(parts) > 1 else self.current_path
@@ -281,14 +269,15 @@ class SSHShell(paramiko.ServerInterface):
             error_text = f"命令執行錯誤: {str(e)}\r\n"
             self.channel.send(error_text.encode('utf-8'))
 
-    def run_clockmate(self, mode: str = 'manaul'):
+    def run_clockmate(self, mode: str = 'manual'):
         """在 SSH channel 中執行 ClockMate CLI，橋接 stdin/stdout。"""
         from main import run_llm_cli, set_output_stream, set_io_hooks
 
         class ChannelWriter:
             def __init__(self, shell_ref):
                 self.shell_ref = shell_ref
-                self.is_plain = True
+                # 標記為非 plain，讓 Rich 啟用樣式渲染
+                self.is_plain = False
             def write(self, s):
                 if not s:
                     return
@@ -427,7 +416,7 @@ class SSHShell(paramiko.ServerInterface):
         try:
             help_text = (
                 "\r\n=== 可用指令 ===\r\n"
-                "clockmate [-m/--mode llm|manaul] [-t/--target local|ssh]\r\n"
+                "clockmate [-m/--mode llm|manual]\r\n"
                 "                  - 啟動 ClockMate 互動流程\r\n"
                 "help              - 顯示此幫助\r\n"
                 "ls [路徑]         - 列出目錄 (例: ls C:\\Users)\r\n"

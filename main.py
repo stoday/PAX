@@ -284,7 +284,8 @@ def run_llm_cli(mode="manual", output_stream=None):
     now = datetime.datetime.now()
     target_year_month = f"{now.year}/{now.month:02d}"
     if mode == "llm":
-        user_message = prompt_with_default("[bold]請輸入工時資料，直接按 Enter 會使用預設值[/bold]", "")
+        console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值09:00-18:00 原因:忘刷。[/bold]")
+        user_message = prompt_with_default("請輸入工時資料", "")
         user_prompt = prompt_create(user_message=user_message)
 
         # 定義 MCP 伺服器連接資訊

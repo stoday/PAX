@@ -100,11 +100,10 @@ class SSHShell(paramiko.ServerInterface):
             print("錯誤: channel 未設置")
             return
         try:
-            from main import run_llm_cli, set_output_stream
             self.show_welcome()
 
             # 進入互動式 shell，提供 clockmate 指令
-            self.safe_send("輸入 'help' 或 'clockmate --mode llm'")
+            self.safe_send("輸入 'help' 或 'clockmate'")
             buffer = ""
             self.send_prompt()
             while True:
@@ -218,6 +217,32 @@ class SSHShell(paramiko.ServerInterface):
                     tokens = shlex.split(command)
                 except Exception:
                     tokens = parts
+                # 參數檢查與建議：擋下任何未知的 --參數
+                recognized = {'--mode', '-m'}
+                # 收集使用者輸入的長參數 (以 - 開頭)
+                bad_params = []
+                suggestions = []
+                import difflib
+                for t in tokens[1:]:
+                    if t.startswith('-'):
+                        # 若是 key=value 形式，拆 key
+                        key = t.split('=')[0]
+                        if key not in recognized:
+                            bad_params.append(t)
+                            # 給出最相近的建議
+                            close = difflib.get_close_matches(key, list(recognized), n=1, cutoff=0.5)
+                            if close:
+                                suggestions.append(f"{t} → {close[0]}")
+                            else:
+                                suggestions.append(f"{t} (未知參數)")
+                if bad_params:
+                    msg_lines = ["❌ 未知參數:"] + [f"  - {bp}" for bp in bad_params]
+                    if suggestions:
+                        msg_lines.append("可能想輸入:")
+                        msg_lines += [f"  - {s}" for s in suggestions]
+                    msg_lines.append("請使用 'clockmate --mode llm' 或 'clockmate --mode manual'")
+                    self.safe_send("\r\n" + "\r\n".join(msg_lines) + "\r\n")
+                    return
                 i = 1
                 while i < len(tokens):
                     tok = tokens[i]

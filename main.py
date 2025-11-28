@@ -12,6 +12,7 @@ from rich.table import Table
 from rich import box
 import dotenv
 import os
+from get_token import get_tokens_from_browser
 
 import akasha
 MODEL = "gemini:gemini-2.5-flash"
@@ -284,8 +285,9 @@ def run_llm_cli(mode="manual", output_stream=None):
     now = datetime.datetime.now()
     target_year_month = f"{now.year}/{now.month:02d}"
     if mode == "llm":
+        console.print("[bold]mode: 大型語言模型[/bold]")
         console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值09:00-18:00 原因:忘刷。[/bold]")
-        user_message = prompt_with_default("請輸入工時資料", "")
+        user_message = prompt_with_default("請輸入工時資料")
         user_prompt = prompt_create(user_message=user_message)
 
         # 定義 MCP 伺服器連接資訊
@@ -301,7 +303,6 @@ def run_llm_cli(mode="manual", output_stream=None):
             model=MODEL,
             temperature=0.01,
             verbose=False,
-            keep_logs=False,
             max_output_tokens=10000
         )
         response = agent.mcp_agent(connection_info, user_prompt)
@@ -315,6 +316,7 @@ def run_llm_cli(mode="manual", output_stream=None):
 
         final_work_time = parsed_or_msg
     elif mode == "manual":
+        console.print("[bold]mode: 手動[/bold]")
         console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值。[/bold]")
         target_year_month = prompt_with_default("填寫年月 (YYYY/MM)", target_year_month)
         arrival_time = prompt_with_default("預設上班時間 (HH:MM)", "09:00")
@@ -343,6 +345,8 @@ def run_llm_cli(mode="manual", output_stream=None):
     if not prompt_yes_no("是否繼續並生成表單資料？", True):
         console.print("[yellow]⚠️ 已取消操作。[/yellow]")
         return
+    
+    get_tokens_from_browser()
 
     form_data, session = get_fresh_form_llm_data(target_year_month, final_work_time, mode=mode)
     if not form_data:

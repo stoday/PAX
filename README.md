@@ -18,7 +18,14 @@ pip install -e .
 
 ## 使用方法
 
-### 1. 取得登入憑證
+### 1. Server端
+
+#### 1. 設置API_KEY
+
+在專案位置新增 `.env`
+並保存API_KEY
+
+#### 1. 啟用服務
 ```bash
 python start_services.py
 ```

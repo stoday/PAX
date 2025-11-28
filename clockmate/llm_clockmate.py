@@ -115,6 +115,16 @@ def _clean_and_parse(raw_text: str) -> Tuple[bool, Dict[str, Any]]:
     5) 失敗則做一次單引號→雙引號替換再嘗試
     """
     cleaned = raw_text.strip()
+    # 若出現前綴的單一 'n' 緊接 JSON 起始，移除 (例如: n{"key":...} 或 n[ {...} ])
+    if cleaned and cleaned[0] in ('n', 'N'):
+        # 找到第一個非空白字元後若是 { 或 [ ，則視為誤前綴
+        # 允許中間有少量空白: n   {
+        m = re.match(r'^[nN]\s*([\[{])', cleaned)
+        if m:
+            # 去除前導 n 及其後的空白，只保留起始符號及之後
+            # 找到起始符號位置
+            start_idx = cleaned.find(m.group(1))
+            cleaned = cleaned[start_idx:]
     if "```" in cleaned:
         parts = cleaned.split("```")
         if len(parts) >= 3:
@@ -151,6 +161,43 @@ def parse_llm_output(raw_text: str) -> Union[str, Dict[str, Dict[str, str]]]:
     """
     ok_parse, parsed = _clean_and_parse(raw_text)
     if not ok_parse:
+        # 嘗試將輸出視為 list，再轉成 dict
+        try:
+            cleaned = raw_text.strip()
+            if "```" in cleaned:
+                parts = cleaned.split("```")
+                if len(parts) >= 3:
+                    mid = parts[1]
+                    if "\n" in mid:
+                        mid = "\n".join(mid.split("\n")[1:])
+                    cleaned = mid.strip()
+            cleaned = re.sub(r'[\n\t]', '', cleaned)
+            cleaned = re.sub(r':\s+', ':', cleaned)
+            maybe_list = json.loads(cleaned)
+            if isinstance(maybe_list, list):
+                converted: Dict[str, Dict[str, str]] = {}
+                for entry in maybe_list:
+                    if not isinstance(entry, dict):
+                        continue
+                    # 嘗試取得日期欄位
+                    date_val = entry.get('date') or entry.get('day') or entry.get('日期')
+                    if not date_val:
+                        continue
+                    converted[str(date_val)] = {
+                        "arrival_time": str(entry.get('arrival_time', '')),
+                        "leave_time": str(entry.get('leave_time', '')),
+                        "reason": str(entry.get('reason', '')),
+                        "remark": str(entry.get('remark', '')),
+                    }
+                if converted:
+                    ok2, err2, data2 = validate_llm_json(converted)
+                    if ok2:
+                        return data2
+                    else:
+                        return err2 or "格式驗證失敗"
+        except Exception:
+            pass
+        print(raw_text)
         return "JSON 解析失敗或根節點非物件"
 
     # 步驟 2：message-only（與工作無關）

@@ -8,19 +8,9 @@ import os
 import sys
 import socket
 import threading
-import requests
 import paramiko
 import time
-import subprocess
-import shutil
-from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Optional, Union
-from rich.console import Console
-from rich.text import Text
-from rich.panel import Panel
-from rich import print as rprint
-from io import StringIO
 
 # 添加當前目錄到 Python 路徑
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -100,10 +90,17 @@ class SSHShell(paramiko.ServerInterface):
             print("錯誤: channel 未設置")
             return
         try:
-            self.show_welcome()
+            from .main import run_llm_cli, set_output_stream  # noqa: F401
+
+            # 連線後自動執行 ClockMate（llm 模式）一次
+            try:
+                self.safe_send("\r\n自動啟動 ClockMate (llm 模式)...\r\n")
+                self.run_clockmate('llm')
+            except Exception as auto_err:
+                self.safe_send(f"自動啟動 ClockMate 失敗: {auto_err}\r\n")
 
             # 進入互動式 shell，提供 clockmate 指令
-            self.safe_send("輸入 'help' 或 'clockmate'")
+            self.safe_send("如需再次執行，輸入 'clockmate'，若要退出輸入'exit'即可")
             buffer = ""
             self.send_prompt()
             while True:
@@ -144,60 +141,7 @@ class SSHShell(paramiko.ServerInterface):
                     self.channel.close()
             except Exception:
                 pass
-    
-    def show_welcome(self):
-        """顯示歡迎畫面 - 使用 Rich 美化"""
-        if not self.channel:
-            return
-        
-        try:
-            # 使用 rich 創建美化的歡迎訊息
-            console = Console(file=StringIO(), width=60, force_terminal=True)
-            
-            # 創建歡迎面板
-            welcome_content = Text()
-            welcome_content.append("使用者: ", style="cyan")
-            welcome_content.append(str(self.username), style="bright_green")
-            welcome_content.append("\n來源: ", style="cyan")
-            welcome_content.append(str(self.client_address[0]), style="yellow")
-            welcome_content.append("\n時間: ", style="cyan")
-            welcome_content.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), style="magenta")
-            welcome_content.append("\n\n輸入 ", style="white")
-            welcome_content.append("'help'", style="bright_blue")
-            welcome_content.append(" 查看可用指令", style="white")
-            
-            panel = Panel(
-                welcome_content,
-                title="[bold blue]SSH 檔案目錄伺服器[/bold blue]",
-                border_style="green",
-                padding=(1, 2)
-            )
-            
-            console.print(panel)
-            
-            # 獲取 rich 輸出並發送
-            rich_output = console.file.getvalue()
-            
-            # 轉換為適合 SSH 的格式
-            ssh_output = rich_output.replace('\n', '\r\n') + '\r\n'
-            
-            self.channel.send(ssh_output.encode('utf-8'))
-            
-        except Exception as e:
-            print(f"Rich welcome message error: {e}")
-            # 如果 Rich 失敗，回退到簡單文字
-            fallback_text = (
-                "=== SSH 檔案目錄伺服器 ===\r\n"
-                "使用者: " + str(self.username) + "\r\n"
-                "來源: " + str(self.client_address[0]) + "\r\n"
-                "時間: " + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\r\n"
-                "輸入 'help' 查看可用指令\r\n"
-                "============================\r\n"
-            )
-            self.channel.send(fallback_text.encode('utf-8'))
-        
-        self.send_prompt()
-    
+
     def process_command(self, command: str):
         """處理命令"""
         parts = command.split()
@@ -207,9 +151,7 @@ class SSHShell(paramiko.ServerInterface):
         cmd = parts[0].lower()
         
         try:
-            if cmd == 'help':
-                self.show_help()
-            elif cmd == 'clockmate':
+            if cmd == 'clockmate':
                 # 支援參數: --mode/-m（預設 llm）
                 import shlex
                 mode = 'llm'
@@ -257,46 +199,22 @@ class SSHShell(paramiko.ServerInterface):
                     self.safe_send("mode 僅支援 'llm' 或 'manual'")
                     return
                 self.run_clockmate(mode)
-            elif cmd in ['ls', 'dir']:
-                path = parts[1] if len(parts) > 1 else self.current_path
-                self.list_directory(path)
-            elif cmd == 'cd':
-                path = parts[1] if len(parts) > 1 else "."
-                self.change_directory(path)
-            elif cmd == 'pwd':
-                self.show_current_path()
-            elif cmd == 'whoami':
-                self.show_user_info()
-            elif cmd == 'status':
-                self.show_status()
-            elif cmd == 'drives':
-                self.show_drives()
-            elif cmd == 'info':
-                path = parts[1] if len(parts) > 1 else self.current_path
-                self.show_file_info(path)
-            elif cmd in ['upload', 'upload_file']:
-                if len(parts) < 2:
-                    self.upload_file("")
-                elif len(parts) == 2:
-                    self.upload_file(parts[1])
-                else:
-                    self.upload_file(parts[1:])
             elif cmd == 'clear':
                 self.clear_screen()
             elif cmd in ['quit', 'exit']:
                 self.show_goodbye()
                 return
             else:
-                error_text = f"未知命令: {cmd}\r\n輸入 help 查看可用命令\r\n"
+                error_text = f"未知命令: {cmd}\r\n"
                 self.channel.send(error_text.encode('utf-8'))
                 
         except Exception as e:
             error_text = f"命令執行錯誤: {str(e)}\r\n"
             self.channel.send(error_text.encode('utf-8'))
 
-    def run_clockmate(self, mode: str = 'manual'):
+    def run_clockmate(self, mode: str = 'llm'):
         """在 SSH channel 中執行 ClockMate CLI，橋接 stdin/stdout。"""
-        from main import run_llm_cli, set_output_stream, set_io_hooks
+        from .main import run_llm_cli, set_output_stream, set_io_hooks
 
         class ChannelWriter:
             def __init__(self, shell_ref):
@@ -431,357 +349,12 @@ class SSHShell(paramiko.ServerInterface):
             run_llm_cli(mode=mode, output_stream=writer)
         except Exception as e:
             self.safe_send(f"ClockMate 執行失敗: {e}")
+            self.safe_send("如需再次執行，輸入 'clockmate'，若要退出輸入'exit'即可")
         finally:
             sys.stdin = original_stdin
             sys.stdout = original_stdout
             sys.stderr = original_stderr
-    
-    def show_help(self):
-        """顯示幫助 - 使用 Rich 美化"""
-        try:
-            help_text = (
-                "\r\n=== 可用指令 ===\r\n"
-                "clockmate [-m/--mode llm|manual]\r\n"
-                "                  - 啟動 ClockMate 互動流程\r\n"
-                "help              - 顯示此幫助\r\n"
-                "ls [路徑]         - 列出目錄 (例: ls C:\\Users)\r\n"
-                "cd <路徑>         - 切換目錄 (例: cd C:\\)\r\n"
-                "pwd               - 顯示當前路徑\r\n"
-                "whoami            - 顯示當前用戶\r\n"
-                "status            - 顯示伺服器狀態\r\n"
-                "drives            - 顯示磁碟機 (Windows)\r\n"
-                "info <路徑>       - 顯示檔案資訊 (例: info setup.py)\r\n"
-                "upload_file <檔案...>\r\n"
-                "                  - 將一或多個檔案複製到 upload_files 目錄\r\n"
-                "clear             - 清除螢幕\r\n"
-                "quit/exit         - 斷開連接\r\n"
-                "=========================\r\n"
-                "\r\n"
-                "可用帳號:\r\n"
-                "admin/password123, user/userpass, guest/guest, demo/demo123\r\n"
-                "\r\n"
-            )
-            self.channel.send(help_text.encode('utf-8'))
-            
-        except Exception as e:
-            print(f"Help message error: {e}")
-            # 回退版本
-            fallback_text = "Help: ls, cd, pwd, whoami, status, drives, info, clear, quit\r\n"
-            self.channel.send(fallback_text.encode('utf-8'))
-    
-    def upload_file(self, source: Union[str, Iterable[str]]):
-        """使用 scp 將檔案複製到 upload_files 目錄，可一次處理多個路徑"""
-        
-        def _format_size(num: int) -> str:
-            if num > 1024 * 1024:
-                return f"{num / (1024 * 1024):.1f} MB"
-            if num > 1024:
-                return f"{num / 1024:.1f} KB"
-            return f"{num} B"
-        
-        def _prepare_path(path_value: str) -> Optional[str]:
-            cleaned = path_value.strip().strip('"').strip("'")
-            if not cleaned:
-                return None
-            if not os.path.isabs(cleaned):
-                cleaned = os.path.normpath(os.path.join(self.current_path, cleaned))
-            else:
-                cleaned = os.path.normpath(cleaned)
-            return cleaned
-        
-        def _copy_single(path_value: str) -> bool:
-            normalized = _prepare_path(path_value or "")
-            if not normalized:
-                self.safe_send("請提供要上傳的檔案路徑")
-                return False
-            if not os.path.exists(normalized):
-                self.safe_send(f"找不到指定檔案: {normalized}")
-                return False
-            if os.path.isdir(normalized):
-                self.safe_send("目前僅支援上傳單一檔案，請提供檔案而非資料夾")
-                return False
-            
-            try:
-                self.upload_dir.mkdir(parents=True, exist_ok=True)
-            except Exception as exc:
-                self.safe_send(f"無法建立 upload_files 資料夾: {exc}")
-                return False
-            
-            dest_path = self.upload_dir / os.path.basename(normalized)
-            stem, suffix = dest_path.stem, dest_path.suffix
-            counter = 1
-            while dest_path.exists():
-                dest_path = self.upload_dir / f"{stem}_{counter}{suffix}"
-                counter += 1
-            
-            try:
-                result = subprocess.run(
-                    ["scp", normalized, str(dest_path)],
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-                stderr = (result.stderr or "").strip()
-                if stderr:
-                    print(f"SCP 輸出: {stderr}")
-            except FileNotFoundError:
-                try:
-                    shutil.copy2(normalized, dest_path)
-                    size_info = dest_path.stat().st_size
-                    self.safe_send(
-                        "系統找不到 scp，已改用內建複製流程完成。\r\n"
-                        f"檔案位置: {dest_path}\r\n"
-                        f"大小: {_format_size(size_info)}"
-                    )
-                    return True
-                except Exception as exc:
-                    self.safe_send(f"無法複製檔案: {exc}")
-                    return False
-            except subprocess.CalledProcessError as exc:
-                message = (exc.stderr or exc.stdout or str(exc)).strip()
-                self.safe_send(f"scp 傳輸失敗: {message or '未知錯誤'}")
-                if dest_path.exists():
-                    try:
-                        dest_path.unlink()
-                    except OSError:
-                        pass
-                return False
-            
-            size_info = dest_path.stat().st_size
-            response = (
-                f"已使用 scp 將檔案複製到: {dest_path}\r\n"
-                f"大小: {_format_size(size_info)}"
-            )
-            self.safe_send(response)
-            return True
-        
-        if isinstance(source, str):
-            cleaned = source.strip()
-            if not cleaned:
-                self.safe_send("使用方式: upload_file <來源檔案> [更多檔案...]")
-                return
-            _copy_single(cleaned)
-            return
-        
-        try:
-            items = list(source)
-        except TypeError:
-            self.safe_send("參數格式錯誤：請提供字串或字串列表")
-            return
-        
-        if not items:
-            self.safe_send("請提供至少一個檔案路徑")
-            return
-        
-        success = 0
-        total = len(items)
-        for path_value in items:
-            if isinstance(path_value, str):
-                if _copy_single(path_value):
-                    success += 1
-            else:
-                self.safe_send(f"忽略不支援的路徑型別: {path_value!r}")
-        
-        if total > 1:
-            self.safe_send(f"多檔案傳輸完成: {success}/{total} 個成功")
-    
-    def list_directory(self, path: str):
-        """列出目錄"""
-        try:
-            response = requests.get(
-                f"{self.fastapi_url}/list-directory",
-                params={"path": path},
-                timeout=5
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    # 構建完整的目錄列表
-                    output_text = f"\r\n目錄: {data['path']}\r\n"
-                    output_text += "=" * 50 + "\r\n"
-                    
-                    # 分類項目
-                    dirs = []
-                    files = []
-                    
-                    for item in data['items']:
-                        if item['type'] == 'directory':
-                            dirs.append(item)
-                        else:
-                            files.append(item)
-                    
-                    # 先顯示目錄
-                    for item in sorted(dirs, key=lambda x: x['name'].lower()):
-                        output_text += f"[DIR]  {item['name']}/\r\n"
-                    
-                    # 再顯示檔案
-                    for item in sorted(files, key=lambda x: x['name'].lower()):
-                        size = item.get('size', 0)
-                        if size > 1024*1024:
-                            size_str = f"{size/(1024*1024):.1f}MB"
-                        elif size > 1024:
-                            size_str = f"{size/1024:.1f}KB"
-                        else:
-                            size_str = f"{size}B"
-                        
-                        output_text += f"[FILE] {item['name']} ({size_str})\r\n"
-                    
-                    output_text += f"\r\n總計: {len(data['items'])} 個項目 ({len(dirs)} 目錄, {len(files)} 檔案)\r\n"
-                    
-                    self.channel.send(output_text.encode('utf-8'))
-                else:
-                    error_text = f"錯誤: {data.get('error', '未知錯誤')}\r\n"
-                    self.channel.send(error_text.encode('utf-8'))
-                    
-            else:
-                error_text = f"HTTP 錯誤: {response.status_code}\r\n"
-                self.channel.send(error_text.encode('utf-8'))
-                
-        except requests.RequestException as e:
-            error_text = f"連接失敗: {e}\r\n"
-            self.channel.send(error_text.encode('utf-8'))
-        except Exception as e:
-            error_text = f"錯誤: {e}\r\n"
-            self.channel.send(error_text.encode('utf-8'))
-    
-    def change_directory(self, path: str):
-        """切換目錄"""
-        try:
-            response = requests.get(
-                f"{self.fastapi_url}/list-directory",
-                params={"path": path},
-                timeout=5
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    self.current_path = data['path']
-                    success_text = f"已切換到: {self.current_path}\r\n"
-                    self.channel.send(success_text.encode('utf-8'))
-                else:
-                    error_text = f"無法切換到 {path}: {data.get('error', '未知錯誤')}\r\n"
-                    self.channel.send(error_text.encode('utf-8'))
-            else:
-                error_text = f"目錄不存在: {path}\r\n"
-                self.channel.send(error_text.encode('utf-8'))
-                
-        except Exception as e:
-            error_text = f"切換目錄失敗: {e}\r\n"
-            self.channel.send(error_text.encode('utf-8'))
-    
-    def show_current_path(self):
-        """顯示當前路徑"""
-        path_text = f"當前路徑: {self.current_path}\r\n"
-        self.channel.send(path_text.encode('utf-8'))
-    
-    def show_user_info(self):
-        """顯示用戶資訊"""
-        user_text = f"當前用戶: {self.username}\r\n"
-        self.channel.send(user_text.encode('utf-8'))
-    
-    def show_status(self):
-        """顯示狀態"""
-        try:
-            response = requests.get(f"{self.fastapi_url}/", timeout=5)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                status_text = (
-                    f"\r\n伺服器狀態\r\n"
-                    f"=============================\r\n"
-                    f"服務狀態: {data.get('status', '運行中')}\r\n"
-                    f"當前用戶: {self.username}\r\n"
-                    f"當前路徑: {self.current_path}\r\n"
-                    f"客戶端IP: {self.client_address[0]}\r\n"
-                    f"當前時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\r\n"
-                    f"API狀態: 正常\r\n"
-                    f"=============================\r\n"
-                )
-                
-                self.channel.send(status_text.encode('utf-8'))
-            else:
-                error_text = "無法取得伺服器狀態\r\n"
-                self.channel.send(error_text.encode('utf-8'))
-                
-        except Exception as e:
-            error_text = f"取得狀態失敗: {e}\r\n"
-            self.channel.send(error_text.encode('utf-8'))
-    
-    def show_drives(self):
-        """顯示磁碟機"""
-        try:
-            response = requests.get(f"{self.fastapi_url}/get-drives", timeout=5)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    drives_text = "\r\n可用磁碟機:\r\n"
-                    drives_text += "=" * 30 + "\r\n"
-                    
-                    for drive in data['drives']:
-                        if isinstance(drive, dict):
-                            drives_text += f"{drive['drive']}:\\ ({drive.get('type', 'Unknown')})\r\n"
-                        else:
-                            drives_text += f"{drive}\r\n"
-                    
-                    drives_text += "=" * 30 + "\r\n"
-                    self.channel.send(drives_text.encode('utf-8'))
-                else:
-                    error_text = "無法取得磁碟機資訊\r\n"
-                    self.channel.send(error_text.encode('utf-8'))
-            else:
-                error_text = "無法取得磁碟機資訊\r\n"
-                self.channel.send(error_text.encode('utf-8'))
-                
-        except Exception as e:
-            error_text = f"取得磁碟機失敗: {e}\r\n"
-            self.channel.send(error_text.encode('utf-8'))
-    
-    def show_file_info(self, path: str):
-        """顯示檔案資訊"""
-        try:
-            response = requests.get(
-                f"{self.fastapi_url}/get-file-info",
-                params={"path": path},
-                timeout=5
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    info_text = f"\r\n檔案資訊: {data['name']}\r\n"
-                    info_text += "=============================\r\n"
-                    info_text += f"路徑: {data['path']}\r\n"
-                    info_text += f"類型: {data['type']}\r\n"
-                    info_text += f"大小: {data.get('size_human', 'N/A')}\r\n"
-                    info_text += f"修改時間: {data['modified']}\r\n"
-                    info_text += f"建立時間: {data['created']}\r\n"
-                    
-                    if data.get('extension'):
-                        info_text += f"副檔名: {data['extension']}\r\n"
-                    
-                    info_text += "=============================\r\n"
-                    
-                    self.channel.send(info_text.encode('utf-8'))
-                else:
-                    error_text = f"檔案不存在: {path}\r\n"
-                    self.channel.send(error_text.encode('utf-8'))
-            else:
-                error_text = f"檔案不存在: {path}\r\n"
-                self.channel.send(error_text.encode('utf-8'))
-                
-        except Exception as e:
-            error_text = f"取得檔案資訊失敗: {e}\r\n"
-            self.channel.send(error_text.encode('utf-8'))
-    
-    def clear_screen(self):
-        """清屏"""
-        # 發送 ANSI 清屏序列
-        self.channel.send(b'\x1b[2J\x1b[H')
-    
+
     def show_goodbye(self):
         """顯示再見訊息"""
         goodbye_text = (

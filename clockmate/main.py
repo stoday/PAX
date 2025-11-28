@@ -12,7 +12,7 @@ from rich.table import Table
 from rich import box
 import dotenv
 import os
-from get_token import get_tokens_from_browser
+from .get_token import get_tokens_from_browser
 
 import akasha
 MODEL = "gemini:gemini-2.5-flash"
@@ -226,7 +226,7 @@ def display_welcome_banner(plain: bool = False):
 def prompt_with_default(prompt_text, default_value=None):
     # 若有自訂輸入掛勾，使用簡單文字提示
     if default_value is not None:
-        prompt_plain = f"{prompt_text} [{default_value}]: "
+        prompt_plain = f"{prompt_text} 預設值: [{default_value}]: "
     else:
         prompt_plain = f"{prompt_text}: "
     if INPUT_FUNC:
@@ -276,12 +276,16 @@ def set_io_hooks(input_func=None, confirm_func=None):
     INPUT_FUNC = input_func
     CONFIRM_FUNC = confirm_func
 
-def run_llm_cli(mode="manual", output_stream=None):
+def run_llm_cli(mode="llm", output_stream=None):
     # If a custom output stream is provided, rebind console to it
     if output_stream is not None:
         set_output_stream(output_stream)
     # 顯示 Rich 渲染的 banner
     display_welcome_banner(plain=False)
+    mode = prompt_with_default("請選擇模式manual(手動) / llm(大型語言模型)", "llm")
+    if mode not in ["llm", "manual"]:
+        mode = "llm"
+        console.print("[bold]未知模式，使用預設值:llm[/bold]")
     now = datetime.datetime.now()
     target_year_month = f"{now.year}/{now.month:02d}"
     if mode == "llm":
@@ -343,14 +347,14 @@ def run_llm_cli(mode="manual", output_stream=None):
         final_work_time = custom_work_times
 
     if not prompt_yes_no("是否繼續並生成表單資料？", True):
-        console.print("[yellow]⚠️ 已取消操作。[/yellow]")
+        console.print("[yellow]已取消操作。[/yellow]")
         return
     
     get_tokens_from_browser()
 
     form_data, session = get_fresh_form_llm_data(target_year_month, final_work_time, mode=mode)
     if not form_data:
-        console.print("[bold red]❌ 無法生成表單資料，請稍後再試。[/bold red]")
+        console.print("[bold red]無法生成表單資料，請稍後再試。[/bold red]")
         return
 
     console.rule("[bold green]表單資料已完成建立[/bold green]")
@@ -427,9 +431,9 @@ def get_fresh_form_llm_data(year_month=None, work_times=None,mode="local"):
     }
     missing_cookies = [name for name, value in cookie_values.items() if not value]
     if missing_cookies:
-        console.print(f"[yellow]⚠️ .env 中缺少 cookie 值: {', '.join(missing_cookies)}，請先執行 get_token.py[/yellow]")
+        console.print(f"[yellow].env 中缺少 cookie 值: {', '.join(missing_cookies)}，請先執行 get_token.py[/yellow]")
     else:
-        console.print("[green]✅ 已從 .env 讀取登入 cookie。[/green]")
+        console.print("[green]已從 .env 讀取登入 cookie。[/green]")
 
     for name, value in cookie_values.items():
         if value:

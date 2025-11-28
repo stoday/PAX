@@ -16,4 +16,8 @@ def get_tokens_from_browser():
     from .get_token import get_tokens_from_browser as _get_tokens
     return _get_tokens()
 
-__all__ = ['run_llm_cli', 'get_tokens_from_browser']
+__all__ = ["main", "run_ssh_server", 'run_llm_cli', 'get_tokens_from_browser']
+
+
+# 重新匯出方便測試或直接從套件呼叫
+# from .start_services import main, run_ssh_server  # noqa: F401

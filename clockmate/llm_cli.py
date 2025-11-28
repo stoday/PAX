@@ -1,12 +1,12 @@
 """
 ClockMate CLI 命令列介面
 """
-from get_token import get_tokens_from_browser
+from .get_token import get_tokens_from_browser
 import argparse
 
 # 延遲載入，僅在需要時導入 SSH 伺服器
 def _start_ssh_server(host: str, port: int, fastapi_url: str):
-    from ssh_server_plain import SSHServer
+    from .ssh_server_plain import SSHServer
     server = SSHServer(host=host, port=port, fastapi_url=fastapi_url)
     server.start()
 

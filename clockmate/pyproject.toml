@@ -42,6 +42,6 @@ Homepage = "https://gitlab.com/your-username/clockmate"
 Repository = "https://gitlab.com/your-username/clockmate.git"
 Issues = "https://gitlab.com/your-username/clockmate/-/issues"
 
+# entry point: 指向start_services:main
 [project.scripts]
-clockmate = "clockmate.cli:main"
-clockmate-token = "clockmate.cli:get_token"
+clockmate = "clockmate.start_services:main"

@@ -1,15 +1,36 @@
 """
 ClockMate CLI 命令列介面
 """
-from .get_token import get_tokens_from_browser
+from get_token import get_tokens_from_browser
 import argparse
+import termlit
 
-# 延遲載入，僅在需要時導入 SSH 伺服器
+# # 延遲載入，僅在需要時導入 SSH 伺服器
+# def _start_ssh_server(host: str, port: int, fastapi_url: str):
+#     from .ssh_server_plain import SSHServer
+#     server = SSHServer(host=host, port=port, fastapi_url=fastapi_url)
+#     server.start()
+
 def _start_ssh_server(host: str, port: int, fastapi_url: str):
-    from .ssh_server_plain import SSHServer
-    server = SSHServer(host=host, port=port, fastapi_url=fastapi_url)
-    server.start()
-
+    """啟動 SSH 伺服器"""
+    def app():
+        termlit.welcome(
+            title='Hello',
+            subtitle='Version 0.1.0',
+            description='您填工時的好幫手',
+        )
+        
+        while True:
+            prompt = termlit.input("問題: ")
+            if prompt.lower() in ['exit', 'quit']:
+                termlit.message("再見！")
+                break
+            
+            with termlit.spinner("dots", "正在處理您的請求..."):
+                termlit.write('收到您的輸入: ' + prompt)
+    
+    termlit.run(app)
+            
 VALID_MODES = ["manual", "llm"]
 DEFAULT_MODE = "llm"
 

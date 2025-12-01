@@ -2,13 +2,11 @@ import datetime
 import json
 import re
 from typing import Dict, Tuple, List, Any, Union
-
 import akasha
-
 import dotenv
 dotenv.load_dotenv()
-from mcp.server.fastmcp import FastMCP  # noqa: E402
-mcp = FastMCP("get_per_day_work_times_by_llm")
+# from mcp.server.fastmcp import FastMCP  # noqa: E402
+# mcp = FastMCP("get_per_day_work_times_by_llm")
 
 
 def get_weekend():
@@ -27,6 +25,7 @@ def get_weekend():
         if d.weekday() >= 5:  # 5=Saturday, 6=Sunday
             weekends += f"{month:02d}-{day:02d},"
     return year, month, today, weekends
+
 
 def prompt_create(user_message = ""):
     year, month, today, weekends = get_weekend()
@@ -47,19 +46,25 @@ def prompt_create(user_message = ""):
     """
     return user_prompt
 
-@mcp.tool()
+
+# @mcp.tool()
 def get_per_day_work_times_by_llm(
         model: str = "gemini:gemini-2.5-flash",
         user_prompt: str = "",
         info: str = "",
     ):
-    user_prompt = prompt_create()
+    user_prompt = prompt_create(user_message=user_prompt)
     model = "gemini:gemini-2.5-flash"
-    ak = akasha.ask(model=model, max_input_tokens=8000, max_output_tokens=20000)
+    ak = akasha.ask(model=model, 
+                    max_input_tokens=8000, 
+                    max_output_tokens=20000,
+                    verbose=True,)
     res = ak(prompt=user_prompt)
     return res
 
+
 TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
 
 def validate_llm_json(parsed: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Dict[str, str]]]:
     """
@@ -103,6 +108,7 @@ def validate_llm_json(parsed: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Dict
         }
 
     return True, "", result
+
 
 def _clean_and_parse(raw_text: str) -> Tuple[bool, Dict[str, Any]]:
     """移除 code fence、多餘空白換行，並嘗試解析為 JSON 物件(dict)。
@@ -152,6 +158,7 @@ def _clean_and_parse(raw_text: str) -> Tuple[bool, Dict[str, Any]]:
             return False, raw_text
         except Exception:
             return False, raw_text
+
 
 def parse_llm_output(raw_text: str) -> Union[str, Dict[str, Dict[str, str]]]:
     """
@@ -210,5 +217,18 @@ def parse_llm_output(raw_text: str) -> Union[str, Dict[str, Dict[str, str]]]:
         return err or "格式驗證失敗"
     return data
 
+
+def main():
+    response = get_per_day_work_times_by_llm(
+        user_prompt="今天8點上班，下午六點下班。",
+        )
+    print("Raw LLM Response:")
+    print(response)
+
+
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
+    main()
+
+
+# if __name__ == "__main__":
+#     mcp.run(transport="stdio")

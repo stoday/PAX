@@ -23,7 +23,7 @@ def _start_ssh_server(host: str, port: int, fastapi_url: str):
         while True:
             prompt = termlit.input("問題: ")
             if prompt.lower() in ['exit', 'quit']:
-                termlit.message("再見！")
+                termlit.write("再見！")
                 break
             
             with termlit.spinner("dots", "正在處理您的請求..."):

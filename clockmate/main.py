@@ -232,7 +232,10 @@ def prompt_with_default(prompt_text, default_value=None):
     if INPUT_FUNC:
         try:
             val = INPUT_FUNC(prompt_plain, default_value)
-        except Exception:
+        except Exception as e:
+            # 讓自訂的 ExitRequested 例外傳遞以便 SSH 層捕捉並斷線
+            if e.__class__.__name__ == 'ExitRequested':
+                raise
             val = ""
         return (val or default_value) if default_value is not None else (val or "")
     # 始終使用 Rich 標記以確保渲染樣式
@@ -248,7 +251,9 @@ def prompt_yes_no(prompt_text, default=True):
     if CONFIRM_FUNC:
         try:
             return CONFIRM_FUNC(prompt_text, default)
-        except Exception:
+        except Exception as e:
+            if e.__class__.__name__ == 'ExitRequested':
+                raise
             return default
     return Confirm.ask(f"[bold white]{prompt_text}[/bold white]", default=default)
 
@@ -285,39 +290,70 @@ def run_llm_cli(mode="llm", output_stream=None):
     now = datetime.datetime.now()
     target_year_month = f"{now.year}/{now.month:02d}"
     if mode == "llm":
-        console.print("[bold]mode: 大型語言模型[/bold]")
-        console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值09:00-18:00 原因:忘刷。[/bold]")
-        user_message = prompt_with_default("請輸入工時資料")
-        console.print("[bold]思考中...[/bold]")
-        user_prompt = prompt_create(user_message=user_message)
+        # console.print("[bold]目前模式: 大型語言模型[/bold]")
+        console.print("處理範圍：本月 1 日至今日")
+        console.print("預設時間 09:00-18:00")
+        console.print("預設原因：忘刷")
+        console.print(" - 直接按 [Enter]：將使用預設值")
+        console.print(" - 輸入 'exit'： 退出系統")
+        console.print("[bold]請輸入工時資料[/bold]")
 
-        # 定義 MCP 伺服器連接資訊
-        connection_info = {
-            "get_per_day_work_times_by_llm": {
-                "command": "python",
-                "args": ["clockmate\llm_clockmate.py"],
-                "transport": "stdio",
-            },    
-        }
+        # 迴圈：若 LLM 回覆 reask，提示並請使用者重新輸入
+        accumulated_message = ""
+        # 首次或累積後的訊息提示
+        user_message = prompt_with_default(">")
+        while True:
+            # 將使用者輸入累積成單一訊息（保留上下文）
+            if accumulated_message:
+                accumulated_message = f"{accumulated_message}\n{user_message}".strip()
+            else:
+                accumulated_message = user_message.strip()
 
-        agent = akasha.agents(
-            model=MODEL,
-            temperature=0.01,
-            verbose=False,
-            max_output_tokens=10000
-        )
-        response = agent.mcp_agent(connection_info, user_prompt)
-        parsed_or_msg = parse_llm_output(response)
-        
-        if isinstance(parsed_or_msg, str):
-            console.print(f"[yellow]I'm sorry, but I cannot assist with that request.{parsed_or_msg}[/yellow]")
-            return
-        else:
+            console.print("[bold]思考中...[/bold]")
+            user_prompt = prompt_create(user_message=accumulated_message)
+
+            # 定義 MCP 伺服器連接資訊
+            connection_info = {
+                "get_per_day_work_times_by_llm": {
+                    "command": "python",
+                    "args": ["clockmate\\llm_clockmate.py"],
+                    "transport": "stdio",
+                },    
+            }
+
+            agent = akasha.agents(
+                model=MODEL,
+                temperature=0.01,
+                verbose=False,
+                max_output_tokens=10000
+            )
+            response = agent.mcp_agent(connection_info, user_prompt)
+            parsed_or_msg = parse_llm_output(response)
+
+            # 需要重新提問：要求使用者再次輸入非空補充，並合併到累積訊息
+            if isinstance(parsed_or_msg, dict) and 'reask' in parsed_or_msg:
+                console.print(f"[yellow]{parsed_or_msg['reask']}[/yellow]")
+                # 強制再次輸入不得為空
+                while True:
+                    supplement = prompt_with_default("> (請補充說明，不可空白)")
+                    if supplement.strip():
+                        accumulated_message = f"{accumulated_message}\n{parsed_or_msg['reask']}\n{supplement.strip()}".strip()
+                        break
+                    else:
+                        console.print("[yellow]輸入不可為空，請再試一次。[/yellow]")
+                # 回到迴圈，用累積訊息再呼叫 LLM
+                continue
+
+            # 非 reask：若為文字（錯誤/無關），結束此次執行
+            if isinstance(parsed_or_msg, str):
+                console.print(f"[yellow]{parsed_or_msg}[/yellow]")
+                return
+
             console.print("[yellow]工時正確生成.[/yellow]")
-
-        final_work_time = parsed_or_msg
+            final_work_time = parsed_or_msg
+            break
     elif mode == "manual":
-        console.print("[bold]mode: 手動[/bold]")
+        # console.print("[bold]目前模式: 手動[/bold]")
         console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值。[/bold]")
         target_year_month = prompt_with_default("填寫年月 (YYYY/MM)", target_year_month)
         arrival_time = prompt_with_default("預設上班時間 (HH:MM)", "09:00")

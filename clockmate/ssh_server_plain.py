@@ -30,6 +30,7 @@ class SSHShell(paramiko.ServerInterface):
         self.current_path = "C:\\"
         self.channel = None
         self.upload_dir = DEFAULT_UPLOAD_DIR
+        self._exit_requested = False
     
     def check_auth_password(self, username, password):
         """密碼認證"""
@@ -85,54 +86,19 @@ class SSHShell(paramiko.ServerInterface):
                 print(f"發送訊息失敗: {e}")
     
     def run_shell(self):
-        """運行 shell 會話"""
+        """運行 shell 會話：持續自動執行 ClockMate，直到使用者於 ClockMate 內輸入 exit/quit。"""
         if not self.channel:
             print("錯誤: channel 未設置")
             return
         try:
-            from .main import run_llm_cli, set_output_stream  # noqa: F401
-
-            # 連線後自動執行 ClockMate（llm 模式）一次
-            try:
-                self.safe_send("\r\n自動啟動 ClockMate (llm 模式)...\r\n")
-                self.run_clockmate('llm')
-            except Exception as auto_err:
-                self.safe_send(f"自動啟動 ClockMate 失敗: {auto_err}\r\n")
-
-            # 進入互動式 shell，提供 clockmate 指令
-            self.safe_send("如需再次執行，輸入 'clockmate'，若要退出輸入'exit'即可")
-            buffer = ""
-            self.send_prompt()
+            # 持續自動執行 ClockMate（llm 模式）
             while True:
-                try:
-                    data = self.channel.recv(1024)
-                    if not data:
-                        break
-                    text = data.decode('utf-8', errors='ignore')
-                    for char in text:
-                        if char in ['\r', '\n']:
-                            if buffer.strip():
-                                command = buffer.strip()
-                                if command.lower() in ['quit', 'exit']:
-                                    self.show_goodbye()
-                                    return
-                                self.process_command(command)
-                            buffer = ""
-                            self.send_prompt()
-                        elif char == '\x03':  # Ctrl+C
-                            self.channel.send("\n^C\n".encode('utf-8'))
-                            buffer = ""
-                            self.send_prompt()
-                        elif char in ['\x7f', '\x08']:  # Backspace
-                            if buffer:
-                                buffer = buffer[:-1]
-                                self.channel.send("\x08 \x08".encode('utf-8'))
-                        elif char.isprintable():
-                            buffer += char
-                            self.channel.send(char.encode('utf-8'))
-                except Exception as loop_err:
-                    print(f"Shell 迴圈錯誤: {loop_err}")
+                if self.channel is None or self.channel.closed:
                     break
+                cont = self.run_clockmate('llm')
+                if not cont:
+                    # run_clockmate 已執行關閉（若是 exit）
+                    return
         except Exception as e:
             print(f"SSH Shell 會話錯誤: {e}")
         finally:
@@ -213,7 +179,9 @@ class SSHShell(paramiko.ServerInterface):
             self.channel.send(error_text.encode('utf-8'))
 
     def run_clockmate(self, mode: str = 'llm'):
-        """在 SSH channel 中執行 ClockMate CLI，橋接 stdin/stdout。"""
+        """在 SSH channel 中執行 ClockMate CLI，橋接 stdin/stdout。
+        回傳 True 代表完成並可繼續，False 代表使用者要求離開。
+        """
         from .main import run_llm_cli, set_output_stream, set_io_hooks
 
         class ChannelWriter:
@@ -296,6 +264,9 @@ class SSHShell(paramiko.ServerInterface):
             def isatty(self):
                 return True
 
+        class ExitRequested(Exception):
+            pass
+
         # 暫時替換標準 IO
         original_stdin = sys.stdin
         original_stdout = sys.stdout
@@ -320,9 +291,13 @@ class SSHShell(paramiko.ServerInterface):
                 if line is None:
                     return default_val or ""
                 line = line.rstrip('\r\n')
+                if line.strip().lower() in ("exit", "quit"):
+                    self._exit_requested = True
+                    raise ExitRequested()
                 return line if line != "" else (default_val or "")
             except Exception:
-                return default_val or ""
+                # 若為主動離開，拋例外供上層處理
+                raise
 
         def ssh_confirm(prompt_text: str, default: bool = True) -> bool:
             suffix = " [Y/n]: " if default else " [y/N]: "
@@ -335,21 +310,30 @@ class SSHShell(paramiko.ServerInterface):
                 if not ans:
                     return default
                 ans = ans.strip().lower()
+                if ans in ("exit", "quit"):
+                    self._exit_requested = True
+                    raise ExitRequested()
                 if ans in ("y", "yes"):
                     return True
                 if ans in ("n", "no"):
                     return False
                 return default
             except Exception:
-                return default
+                raise
 
         set_io_hooks(input_func=ssh_input, confirm_func=ssh_confirm)
 
         try:
             run_llm_cli(mode=mode, output_stream=writer)
+            return True
+        except ExitRequested:
+            # 使用者要求離開：直接關閉連線
+            self.show_goodbye()
+            return False
         except Exception as e:
             self.safe_send(f"ClockMate 執行失敗: {e}")
-            self.safe_send("如需再次執行，輸入 'clockmate'，若要退出輸入'exit'即可")
+            # 發生錯誤時，仍允許下一輪重試
+            return True
         finally:
             sys.stdin = original_stdin
             sys.stdout = original_stdout

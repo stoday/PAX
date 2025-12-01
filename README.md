@@ -11,7 +11,8 @@ pip install git+https://gitlab.com/your-username/clockmate.git
 
 ### 從本地安裝
 ```bash
-git clone https://gitlab.com/your-username/clockmate.git
+git init
+git pull https://gitlab.com/your-username/clockmate.git ssh
 cd clockmate
 pip install -e .
 ```
@@ -25,9 +26,9 @@ pip install -e .
 在專案位置新增 `.env`
 並保存API_KEY
 
-#### 1. 啟用服務
+#### 2. 啟用服務
 ```bash
-python start_services.py
+clockmate
 ```
 
 ### 2. 使用者

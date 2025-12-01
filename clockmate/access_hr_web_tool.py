@@ -13,12 +13,12 @@ from rich import box
 import dotenv
 import os
 
-import akasha
-MODEL = "gemini:gemini-2.5-flash"
-try:
-    from .agent_tools import prompt_create, parse_llm_output
-except:
-    from agent_tools import prompt_create, parse_llm_output
+# import akasha
+# MODEL = "gemini:gemini-2.5-flash"
+# try:
+#     from .agent_tools import prompt_create, parse_llm_output
+# except:
+#     from agent_tools import prompt_create, parse_llm_output
 
 # 載入環境變數
 dotenv.load_dotenv()
@@ -41,11 +41,40 @@ def build_timesheet_url(year_month=None):
     return BASE_TIMESHEET_URL
 
 
-def generate_form_data(year_month=None, 
-                       default_work_times=None,
-                       until_date=None):
+def generate_form_data_for_target_dates(year_month=None, 
+                                       target_dates:dict=None, # ex: {'20251101':{'arrival_time': '09:00', 'leave_time': '18:00', 'reason': '忘刷', 'remark': ''}, ...}
+                                       default_work_times=None):
     """
-    自動生成工時表單資料
+    自動生成工時表單資料，**僅針對指定日期列表修改**，並填入預設工作時間。
+    """
+    # 先生成至今的所有日期資料
+    full_form_data = generate_form_util_today(year_month=year_month,
+                                        default_work_times=default_work_times)
+    
+    # 根據目標日期來更新相關欄位
+    if target_dates:
+        for date_str, times in target_dates.items():
+            if len(date_str) != 8 or not date_str.isdigit():
+                console.print(f"[red]⚠️ 日期格式錯誤: {date_str}，應為 YYYYMMDD 格式，跳過此日期。[/red]")
+                continue
+            # 更新對應欄位
+            full_form_data[f"ctl00$ContentPlaceHolder1$txtArr_{date_str}"] = times.get('arrival_time', '')
+            full_form_data[f"ctl00$ContentPlaceHolder1$txtLev_{date_str}"] = times.get('leave_time', '')
+            full_form_data[f"ctl00$ContentPlaceHolder1$Dp_{date_str}"] = times.get('reason', '')
+            full_form_data[f"ctl00$ContentPlaceHolder1$txtR_{date_str}"] = times.get('remark', '')
+            
+        return full_form_data
+    
+    else:
+        console.print("[yellow]⚠️ 未提供目標日期資料，無法更新表單。[/yellow]")
+        return full_form_data
+
+
+def generate_form_util_today(year_month=None,
+                             default_work_times=None,
+                             until_date=None):
+    """
+    自動生成工時表單資料，從年月開始到指定日期（或月底），並填入預設工作時間。
     
     Args:
         year_month (str): 年月，格式如 "2025/10"，如果不提供則使用當前月份
@@ -214,21 +243,8 @@ def get_post_headers(year_month=None):
     }
 
 
-# def display_welcome_banner(plain: bool = False):
-#     console.print("\r\n")
-
-#     ascii_banner = figlet.renderText("ClockMate")
-#     panel = Panel.fit(
-#         ascii_banner.rstrip(),
-#         border_style="cyan",
-#         title="ClockMate 工時小幫手",
-#         style="bold magenta",
-#     )
-#     console.print(panel)
-
-
 def prompt_with_default(prompt_text, default_value=None):
-    # 若有自訂輸入掛勾，使用簡單文字提示
+    # 若有自訂輸入掛勾，使用簡單文字提示(花俏顯示使用)
     if default_value is not None:
         prompt_plain = f"{prompt_text} 預設值: [{default_value}]: "
     else:
@@ -249,6 +265,7 @@ def prompt_with_default(prompt_text, default_value=None):
 
 
 def prompt_yes_no(prompt_text, default=True):
+    """使用者確認提示，回傳布林值"""
     if CONFIRM_FUNC:
         try:
             return CONFIRM_FUNC(prompt_text, default)
@@ -283,120 +300,101 @@ def set_io_hooks(input_func=None, confirm_func=None):
     CONFIRM_FUNC = confirm_func
 
 
-def run_llm_cli(mode="llm", output_stream=None):
-    # If a custom output stream is provided, rebind console to it
+def run_cli(output_stream=None):
+    """主要的 CLI 互動流程"""
     if output_stream is not None:
         set_output_stream(output_stream)
-    # 顯示 Rich 渲染的 banner
-    # display_welcome_banner(plain=False)
     now = datetime.datetime.now()
     target_year_month = f"{now.year}/{now.month:02d}"
-    if mode == "llm":
-        # console.print("[bold]mode: 大型語言模型[/bold]")
-        # console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值09:00-18:00 原因:忘刷。[/bold]")
-        user_message = prompt_with_default("請輸入工時資料")
-        # console.print("[bold]思考中...[/bold]")
-        user_prompt = prompt_create(user_message=user_message)
+ 
+    target_year_month = prompt_with_default("填寫年月 (YYYY/MM)", target_year_month)
+    arrival_time = prompt_with_default("預設上班時間 (HH:MM)", "09:00")
+    leave_time = prompt_with_default("預設下班時間 (HH:MM)", "18:00")
+    reason = prompt_with_default("預設原因", "忘刷")
+    remark = prompt_with_default("預設備註 (可留空)", "").strip()
 
-        # 定義 MCP 伺服器連接資訊
-        connection_info = {
-            "get_per_day_work_times_by_llm": {
-                "command": "python",
-                "args": ["clockmate\llm_clockmate.py"],
-                "transport": "stdio",
-            },    
-        }
+    custom_work_times = {
+        'arrival_time': arrival_time,
+        'leave_time': leave_time,
+        'reason': reason,
+        'remark': remark
+    }
 
-        agent = akasha.agents(
-            model=MODEL,
-            temperature=0.01,
-            verbose=False,
-            max_output_tokens=10000
-        )
-        response = agent.mcp_agent(connection_info, user_prompt)
-        parsed_or_msg = parse_llm_output(response)
-        
-        if isinstance(parsed_or_msg, str):
-            console.print(f"[yellow]I'm sorry, but I cannot assist with that request.{parsed_or_msg}[/yellow]")
-            return
-        else:
-            console.print("[yellow]工時正確生成.[/yellow]")
+    # summary_table = Table(show_header=False, box=box.SIMPLE_HEAVY)
+    # summary_table.add_row("✨ 年月", target_year_month)
+    # summary_table.add_row("⏰ 上班/下班", f"{arrival_time} - {leave_time}")
+    # summary_table.add_row("📝 原因", reason)
+    # summary_table.add_row("💬 備註", remark or "（無）")
 
-        final_work_time = parsed_or_msg
-    elif mode == "manual":
-        # console.print("[bold]mode: 手動[/bold]")
-        # console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值。[/bold]")
-        target_year_month = prompt_with_default("填寫年月 (YYYY/MM)", target_year_month)
-        arrival_time = prompt_with_default("預設上班時間 (HH:MM)", "09:00")
-        leave_time = prompt_with_default("預設下班時間 (HH:MM)", "18:00")
-        reason = prompt_with_default("預設原因", "忘刷")
-        remark = prompt_with_default("預設備註 (可留空)", "").strip()
+    # console.rule("[bold cyan]設定摘要[/bold cyan]")
+    # console.print(summary_table)
 
-        custom_work_times = {
-            'arrival_time': arrival_time,
-            'leave_time': leave_time,
-            'reason': reason,
-            'remark': remark
-        }
+    final_work_time = custom_work_times
 
-        summary_table = Table(show_header=False, box=box.SIMPLE_HEAVY)
-        summary_table.add_row("✨ 年月", target_year_month)
-        summary_table.add_row("⏰ 上班/下班", f"{arrival_time} - {leave_time}")
-        summary_table.add_row("📝 原因", reason)
-        summary_table.add_row("💬 備註", remark or "（無）")
-
-        console.rule("[bold cyan]設定摘要[/bold cyan]")
-        console.print(summary_table)
-
-        final_work_time = custom_work_times
-
-    if not prompt_yes_no("是否繼續並生成表單資料？", True):
-        console.print("[yellow]已取消操作。[/yellow]")
-        return
-
-    form_data, session = get_fresh_form_llm_data(target_year_month, final_work_time, mode=mode)
+    # if not prompt_yes_no("是否繼續並生成表單資料？", True):
+    #     console.print("[yellow]已取消操作。[/yellow]")
+    #     return
+    
+    # 生成表單資料: 針對指定日期
+    # form_data, session = get_fresh_form_for_target_dates(target_year_month, final_work_time)
+    
+    # 生成表單資料: 到今天為止
+    form_data, session = get_fresh_form_for_util_today(target_year_month, final_work_time)
+    
     if not form_data:
-        console.print("[bold red]無法生成表單資料，請稍後再試。[/bold red]")
+        # console.print("[bold red]無法生成表單資料，請稍後再試。[/bold red]")
         return
 
-    console.rule("[bold green]表單資料已完成建立[/bold green]")
-    # if fetch_hidden and session:
-    if session:
-        if prompt_yes_no("需要立即提交表單嗎？", True):
-            console.rule("[bold magenta]提交表單[/bold magenta]")
-            console.print("📝 正在提交表單...")
-            post_headers = get_post_headers(target_year_month)
-            console.print(f"[dim]📋 使用 headers: {list(post_headers.keys())}[/dim]")
+    post_headers = get_post_headers(target_year_month)
+    submit_url = build_timesheet_url(target_year_month)
+    response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
+    print('response status: ' + str(response.status_code))
+    print('response text: ' + response.text)
 
-            submit_url = build_timesheet_url(target_year_month)
-            response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
+    # console.rule("[bold green]表單資料已完成建立[/bold green]")
+    # # if fetch_hidden and session:
+    # if session:
+    #     if prompt_yes_no("需要立即提交表單嗎？", True):
+    #         console.rule("[bold magenta]提交表單[/bold magenta]")
+    #         console.print("📝 正在提交表單...")
+    #         post_headers = get_post_headers(target_year_month)
+    #         console.print(f"[dim]📋 使用 headers: {list(post_headers.keys())}[/dim]")
 
-            console.print(f"[bold green]✅ 提交完成！狀態碼: {response.status_code}[/bold green]")
+    #         submit_url = build_timesheet_url(target_year_month)
+    #         response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
 
-            if response.status_code == 302:
-                location = response.headers.get('Location', '未知')
-                console.print(f"[cyan]🔄 重定向到: {location}[/cyan]")
+    #         console.print(f"[bold green]✅ 提交完成！狀態碼: {response.status_code}[/bold green]")
 
-                if 'Default.aspx' not in location:
-                    console.print("[bold green]🎉 表單提交可能成功！[/bold green]")
-                else:
-                    console.print("[bold red]❌ 被重定向到登入頁面，可能需要重新認證[/bold red]")
-            elif response.status_code == 200:
-                console.print("[cyan]📄 收到回應內容:[/cyan]")
-                console.print(response.text[:300] + "..." if len(response.text) > 300 else response.text)
-            else:
-                console.print(f"[yellow]❓ 未預期的狀態碼: {response.status_code}[/yellow]")
-                console.print(f"[yellow]回應內容: {response.text[:200]}[/yellow]")
+    #         if response.status_code == 302:
+    #             location = response.headers.get('Location', '未知')
+    #             console.print(f"[cyan]🔄 重定向到: {location}[/cyan]")
 
-            console.print(f"[dim]\n📊 回應標頭: {dict(response.headers)}[/dim]")
-        else:
-            console.print("[green]👌 表單資料已準備好，您可以稍後手動提交。[/green]")
-    else:
-        console.print("[blue]📦 表單資料已生成，請記得自行補上隱藏欄位後再提交。[/blue]")
+    #             if 'Default.aspx' not in location:
+    #                 console.print("[bold green]🎉 表單提交可能成功！[/bold green]")
+    #             else:
+    #                 console.print("[bold red]❌ 被重定向到登入頁面，可能需要重新認證[/bold red]")
+    #         elif response.status_code == 200:
+    #             console.print("[cyan]📄 收到回應內容:[/cyan]")
+    #             console.print(response.text[:300] + "..." if len(response.text) > 300 else response.text)
+    #         else:
+    #             console.print(f"[yellow]❓ 未預期的狀態碼: {response.status_code}[/yellow]")
+    #             console.print(f"[yellow]回應內容: {response.text[:200]}[/yellow]")
 
-        
-def get_fresh_form_llm_data(year_month=None, work_times=None,mode="local"):
-    """自動從網頁抓取最新的隱藏欄位和 headers，並生成表單資料"""
+    #         console.print(f"[dim]\n📊 回應標頭: {dict(response.headers)}[/dim]")
+    #     else:
+    #         console.print("[green]👌 表單資料已準備好，您可以稍後手動提交。[/green]")
+    # else:
+    #     console.print("[blue]📦 表單資料已生成，請記得自行補上隱藏欄位後再提交。[/blue]")
+
+
+def process_headers_cookies(year_month=None):
+    """自動從網頁抓取最新的隱藏欄位和 headers，並生成表單資料
+    Args:
+        year_month (str): 年月，格式如 "2025/10"
+        work_times (dict): 自訂的上下班時間和原因等資訊
+    returns:
+        tuple: (form_data dict, requests.Session object)
+    """
     # 建立 session 維持 cookie
     session = requests.Session()
     
@@ -432,6 +430,7 @@ def get_fresh_form_llm_data(year_month=None, work_times=None,mode="local"):
         'clientTicket': os.getenv("CLIENT_TICKET", ""),
         'clientUserName': os.getenv("CLIENT_USERNAME", ""),
     }
+
     missing_cookies = [name for name, value in cookie_values.items() if not value]
     if missing_cookies:
         console.print(f"[yellow].env 中缺少 cookie 值: {', '.join(missing_cookies)}，請先執行 get_token.py[/yellow]")
@@ -462,167 +461,128 @@ def get_fresh_form_llm_data(year_month=None, work_times=None,mode="local"):
     
     # 解析 HTML 取得隱藏欄位
     soup = BeautifulSoup(response.text, 'html.parser')
+    # soup = BeautifulSoup(response.content, 'lxml')
     
     viewstate = soup.find('input', {'name': '__VIEWSTATE'})
     viewstate_generator = soup.find('input', {'name': '__VIEWSTATEGENERATOR'})
     event_validation = soup.find('input', {'name': '__EVENTVALIDATION'})
     
     if not all([viewstate, viewstate_generator, event_validation]):
+        breakpoint()
         console.print("[bold red]❌ 無法找到必要的隱藏欄位，可能需要重新登入[/bold red]")
         console.print(f"[red]找到 __VIEWSTATE: {viewstate is not None}[/red]")
         console.print(f"[red]找到 __VIEWSTATEGENERATOR: {viewstate_generator is not None}[/red]")
         console.print(f"[red]找到 __EVENTVALIDATION: {event_validation is not None}[/red]")
-        return None, None
+        return None, None, None, None
     
     console.print("[bold green]✅ 成功取得所有隱藏欄位[/bold green]")
     console.print(f"[green]__VIEWSTATE 長度: {len(viewstate['value'])}[/green]")
     console.print(f"[green]__VIEWSTATEGENERATOR: {viewstate_generator['value']}[/green]")
     console.print(f"[green]__EVENTVALIDATION 長度: {len(event_validation['value'])}[/green]")
-    
-    # 動態生成表單資料
-    fresh_form_data = generate_form_llm_data(year_month, work_times, mode=mode)
-    
-    # 使用從網頁取得的最新隱藏欄位更新表單資料
-    fresh_form_data['__VIEWSTATE'] = viewstate['value']
-    fresh_form_data['__VIEWSTATEGENERATOR'] = viewstate_generator['value']
-    fresh_form_data['__EVENTVALIDATION'] = event_validation['value']
-    
-    return fresh_form_data, session
+
+    return viewstate, viewstate_generator, event_validation, session
 
 
-def generate_form_llm_data(year_month=None, 
-                           default_work_times=None,
-                           until_date=None,
-                           mode="local"):
-    """
-    自動生成工時表單資料
-    
+def get_fresh_form_for_util_today(year_month=None, work_times=None):
+    """生成表單資料
     Args:
-        year_month (str): 年月，格式如 "2025/10"，如果不提供則使用當前月份
-        default_work_times (dict): 預設工作時間設定，格式如：
+        year_month (str): 年月，格式如 "2025/10"
+        work_times (dict): 自訂的上下班時間和原因等資訊，格式如：
             {
                 'arrival_time': '09:00',    # 預設上班時間
                 'leave_time': '18:00',      # 預設下班時間
                 'reason': '忘刷',           # 預設原因
                 'remark': ''                # 預設備註
             }
-    
-    Returns:
-        dict: 完整的表單資料
+    returns:
+        tuple: (form_data dict, requests.Session object)
     """
-    # 如果沒有提供年月，使用當前年月
-    if year_month is None:
-        now = datetime.datetime.now()
-        year_month = f"{now.year}/{now.month:02d}"
+    viewstate, viewstate_generator, event_validation, session = process_headers_cookies(year_month)
+    if not all([viewstate, viewstate_generator, event_validation, session]):
+        return None, None
+
+    # 動態生成表單資料，自動填到今天為止
+    fresh_form_data = generate_form_util_today(year_month,
+                                               work_times)
+
+    # 使用從網頁取得的最新隱藏欄位更新表單資料
+    fresh_form_data['__VIEWSTATE'] = viewstate['value']
+    fresh_form_data['__VIEWSTATEGENERATOR'] = viewstate_generator['value']
+    fresh_form_data['__EVENTVALIDATION'] = event_validation['value']
+
+    # return fresh_form_data, session. # 回傳給呼叫端進行後續提交 (命令互動使用)
     
-    # 預設工作時間設定
-    if default_work_times is None:
-        default_work_times = {
-            'arrival_time': '09:00',
-            'leave_time': '18:00', 
-            'reason': '忘刷',
-            'remark': ''
-        }
-    
-    # 解析年月
-    try:
-        year, month = year_month.split('/')
-        year = int(year)
-        month = int(month)
-    except ValueError:
-        raise ValueError("年月格式錯誤，請使用 'YYYY/MM' 格式，例如 '2025/10'")
-    
-    # 基本表單資料（隱藏欄位會在後續動態更新）
-    form_data = {
-        "__EVENTTARGET": "ctl00$ContentPlaceHolder1$btnEdit",
-        "__EVENTARGUMENT": "",
-        "__VIEWSTATE": "<GET_FROM_BROWSER>",
-        "__VIEWSTATEGENERATOR": "<GET_FROM_BROWSER>",
-        "__EVENTVALIDATION": "<GET_FROM_BROWSER>",
-        "ctl00$ContentPlaceHolder1$txb_StDay": year_month,
+    form_data = fresh_form_data
+    if not form_data:
+        print("無法生成表單資料，請稍後再試。")
+        # console.print("[bold red]無法生成表單資料，請稍後再試。[/bold red]")
+        return
+
+    post_headers = get_post_headers(year_month)
+    submit_url = build_timesheet_url(year_month)
+    response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
+    print('response status: ' + str(response.status_code))
+    print('response text: ' + response.text)
+
+    return 'response status: ' + str(response.status_code) + \
+        '\n' + 'response text: ' + response.text
+
+
+def get_fresh_form_for_target_dates(year_month=None, target_dates=None):
+    """生成表單資料
+    Args:
+        year_month (str): 年月，格式如 "2025/10"
+        target_dates (dict): 自訂的指定日期及其上下班時間和原因等資訊，格式如：
+            {
+                '20251101': {'arrival_time': '09:00', 'leave_time': '18:00', 'reason': '忘刷', 'remark': ''},
+                '20251102': {'arrival_time': '09:15', 'leave_time': '18:15', 'reason': '忘刷', 'remark': ''},
+                ...
+            }
+    returns:
+        tuple: (form_data dict, requests.Session object)
+    """
+    viewstate, viewstate_generator, event_validation, session = process_headers_cookies(year_month)
+    if not all([viewstate, viewstate_generator, event_validation, session]):
+        return None, None
+
+    # 動態生成表單資料，針對指定日期
+    target_dates = {
+        '20251103': {'arrival_time': '09:03', 'leave_time': '18:03', 'reason': '忘刷', 'remark': ''},
+        '20251105': {'arrival_time': '09:05', 'leave_time': '18:05', 'reason': '忘刷', 'remark': ''},
     }
+    fresh_form_data = generate_form_data_for_target_dates(year_month='2025/11', 
+                                                          target_dates=target_dates)
+
+    # 使用從網頁取得的最新隱藏欄位更新表單資料
+    fresh_form_data['__VIEWSTATE'] = viewstate['value']
+    fresh_form_data['__VIEWSTATEGENERATOR'] = viewstate_generator['value']
+    fresh_form_data['__EVENTVALIDATION'] = event_validation['value']
+
+    # return fresh_form_data, session  # 回傳給呼叫端進行後續提交 (命令互動使用)
+
+    form_data = fresh_form_data
+    if not form_data:
+        # console.print("[bold red]無法生成表單資料，請稍後再試。[/bold red]")
+        return
+
+    post_headers = get_post_headers(year_month)
+    submit_url = build_timesheet_url(year_month)
+    response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
+    print('response status: ' + str(response.status_code))
+    print('response text: ' + response.text)
     
-    # 取得該月的天數
-    days_in_month = calendar.monthrange(year, month)[1]
-    if until_date is None or until_date > days_in_month:
-        until_date = days_in_month
+    return 'response status: ' + str(response.status_code) + \
+        '\n' + 'response text: ' + response.text
 
-    # 生成每一天的表單欄位
-    work_days = []  # 記錄工作日
-    holidays = []   # 記錄假日
 
-    # 判斷是否為「逐日設定」：若提供之 dict 並非單純 arrival/leave/reason/remark 四鍵，
-    # 則視為 {date: {arrival_time, leave_time, reason, remark}, ...}
-
-    for day in range(1, (until_date) + 1):
-        date_str = f"{year}{month:02d}{day:02d}"  # 格式: 20251001
-        
-        # 判斷是否為工作日 (週一到週五)
-        date_obj = datetime.date(year, month, day)
-        is_workday = date_obj.weekday() < 5  # 0-4 是週一到週五
-        
-        if mode =="llm":
-            # 支援多種日期鍵格式：YYYYMMDD / YYYY-MM-DD / YYYY/MM/DD / MM-DD
-            d_keys = [
-                f"{year}{month:02d}{day:02d}",
-                f"{year}-{month:02d}-{day:02d}",
-                f"{year}/{month:02d}/{day:02d}",
-                f"{month:02d}-{day:02d}",
-            ]
-            day_cfg = None
-            for k in d_keys:
-                if k in default_work_times:
-                    day_cfg = default_work_times[k]
-                    break
-
-            if isinstance(day_cfg, dict):
-                arr = day_cfg.get('arrival_time', '')
-                lev = day_cfg.get('leave_time', '')
-                rea = day_cfg.get('reason', '')
-                rem = day_cfg.get('remark', '')
-            else:
-                arr = lev = rea = rem = ''
-
-            form_data[f"ctl00$ContentPlaceHolder1$txtArr_{date_str}"] = arr
-            form_data[f"ctl00$ContentPlaceHolder1$txtLev_{date_str}"] = lev
-            form_data[f"ctl00$ContentPlaceHolder1$Dp_{date_str}"] = rea
-            form_data[f"ctl00$ContentPlaceHolder1$txtR_{date_str}"] = rem
-
-            # 工作日/假日清單仍依平日定義
-            if is_workday:
-                work_days.append(date_str)
-            else:
-                holidays.append(date_str)
-        else:
-            if is_workday:
-                # 工作日：填入預設時間
-                form_data[f"ctl00$ContentPlaceHolder1$txtArr_{date_str}"] = default_work_times['arrival_time']
-                form_data[f"ctl00$ContentPlaceHolder1$txtLev_{date_str}"] = default_work_times['leave_time']
-                form_data[f"ctl00$ContentPlaceHolder1$Dp_{date_str}"] = default_work_times['reason']
-                form_data[f"ctl00$ContentPlaceHolder1$txtR_{date_str}"] = default_work_times['remark']
-                work_days.append(date_str)
-            else:
-                # 假日：空白
-                form_data[f"ctl00$ContentPlaceHolder1$txtArr_{date_str}"] = ""
-                form_data[f"ctl00$ContentPlaceHolder1$txtLev_{date_str}"] = ""
-                form_data[f"ctl00$ContentPlaceHolder1$Dp_{date_str}"] = ""
-                form_data[f"ctl00$ContentPlaceHolder1$txtR_{date_str}"] = ""
-                holidays.append(date_str)
-    
-    # 添加隱藏的控制欄位（根據原本的資料格式）
-    form_data["ctl00$ContentPlaceHolder1$HidWkHCtrl"] = ";".join(holidays)
-    form_data["ctl00$ContentPlaceHolder1$HidWkACtrl"] = ";".join(work_days)
-    form_data["ctl00$ContentPlaceHolder1$HideStTimes"] = ""
-    form_data["ctl00$ContentPlaceHolder1$HidEdTimes"] = ""
-    
-    console.print(f"[bold green]📅 生成 {year_month} 的表單資料[/bold green]")
-    console.print(f"[cyan]📊 工作日: {len(work_days)} 天[/cyan]")
-    console.print(f"[cyan]🏖️ 假日: {len(holidays)} 天[/cyan]")
-    console.print(f"[magenta]⏰ 預設上班時間: {default_work_times['arrival_time']}[/magenta]")
-    console.print(f"[magenta]⏰ 預設下班時間: {default_work_times['leave_time']}[/magenta]")
-    
-    return form_data
-
+# if __name__ == "__main__":
+#     run_cli()
 
 if __name__ == "__main__":
-    run_llm_cli(mode="manual")
+    get_fresh_form_for_util_today(year_month="2025/11",
+                             work_times={
+                                "arrival_time": "09:00",
+                                "leave_time": "18:00",
+                                "reason": "忘刷",
+                                "remark": ""
+                                })

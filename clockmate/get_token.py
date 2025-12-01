@@ -13,6 +13,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 LOGIN_URL = "https://eip.iii.org.tw/"
 # LOGIN_URL = "https://tel.iii.org.tw/telbook/"
 # LOGIN_URL = "https://hrwt.iii.org.tw"
+# LOGIN_URL = "https://hrwt.iii.org.tw"
 SECOND_URL = "https://hrwt.iii.org.tw"
 
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"

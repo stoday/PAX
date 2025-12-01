@@ -12,14 +12,14 @@ from rich.table import Table
 from rich import box
 import dotenv
 import os
-from .get_token import get_tokens_from_browser
+from get_token import get_tokens_from_browser
 
 import akasha
 MODEL = "gemini:gemini-2.5-flash"
 try:
-    from .llm_clockmate import prompt_create, parse_llm_output
+    from .agent_tools import prompt_create, parse_llm_output
 except:
-    from llm_clockmate import prompt_create, parse_llm_output
+    from agent_tools import prompt_create, parse_llm_output
 
 # 載入環境變數
 dotenv.load_dotenv()
@@ -40,6 +40,7 @@ def build_timesheet_url(year_month=None):
         encoded_ym = quote(year_month)
         return f"{BASE_TIMESHEET_URL}?YM={encoded_ym}"
     return BASE_TIMESHEET_URL
+
 
 def generate_form_data(year_month=None, 
                        default_work_times=None,
@@ -137,6 +138,7 @@ def generate_form_data(year_month=None,
     
     return form_data
 
+
 def get_dynamic_user_agent():
     """根據當前系統環境動態生成 User-Agent"""
     system = platform.system()
@@ -171,6 +173,7 @@ def get_dynamic_user_agent():
         # 預設回退 User-Agent
         return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
+
 def get_dynamic_platform_info():
     """根據當前系統生成平台資訊"""
     system = platform.system()
@@ -182,6 +185,7 @@ def get_dynamic_platform_info():
         return '"Linux"'
     else:
         return '"Unknown"'
+
 
 def get_post_headers(year_month=None):
     """取得 POST 提交時的完整 headers（根據當前系統環境）"""
@@ -209,6 +213,7 @@ def get_post_headers(year_month=None):
         "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": platform_info
     }
+
 
 def display_welcome_banner(plain: bool = False):
     console.print("\r\n")
@@ -252,6 +257,7 @@ def prompt_yes_no(prompt_text, default=True):
             return default
     return Confirm.ask(f"[bold white]{prompt_text}[/bold white]", default=default)
 
+
 def set_output_stream(stream):
     """Set a custom stream for Rich console output.
     Provide an object with a `.write(str)` method.
@@ -270,11 +276,13 @@ def set_output_stream(stream):
         # Fallback to default console if stream invalid
         console = Console()
 
+
 def set_io_hooks(input_func=None, confirm_func=None):
     """設定互動 I/O 掛勾（SSH 模式可覆寫輸入/確認）。"""
     global INPUT_FUNC, CONFIRM_FUNC
     INPUT_FUNC = input_func
     CONFIRM_FUNC = confirm_func
+
 
 def run_llm_cli(mode="llm", output_stream=None):
     # If a custom output stream is provided, rebind console to it
@@ -388,6 +396,7 @@ def run_llm_cli(mode="llm", output_stream=None):
             console.print("[green]👌 表單資料已準備好，您可以稍後手動提交。[/green]")
     else:
         console.print("[blue]📦 表單資料已生成，請記得自行補上隱藏欄位後再提交。[/blue]")
+
         
 def get_fresh_form_llm_data(year_month=None, work_times=None,mode="local"):
     """自動從網頁抓取最新的隱藏欄位和 headers，並生成表單資料"""
@@ -483,10 +492,11 @@ def get_fresh_form_llm_data(year_month=None, work_times=None,mode="local"):
     
     return fresh_form_data, session
 
+
 def generate_form_llm_data(year_month=None, 
-                       default_work_times=None,
-                       until_date=None,
-                       mode="local"):
+                           default_work_times=None,
+                           until_date=None,
+                           mode="local"):
     """
     自動生成工時表單資料
     

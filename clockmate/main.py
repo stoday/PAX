@@ -379,6 +379,7 @@ def run_llm_cli(mode="llm", output_stream=None):
 
         final_work_time = custom_work_times
 
+    print(final_work_time)
     if not prompt_yes_no("是否繼續並生成表單資料？", True):
         console.print("[yellow]已取消操作。[/yellow]")
         return

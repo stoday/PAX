@@ -282,23 +282,20 @@ def run_llm_cli(mode="llm", output_stream=None):
         set_output_stream(output_stream)
     # 顯示 Rich 渲染的 banner
     display_welcome_banner(plain=False)
-    mode = prompt_with_default("請選擇模式manual(手動) / llm(大型語言模型)", "llm")
-    if mode not in ["llm", "manual"]:
-        mode = "llm"
-        console.print("[bold]未知模式，使用預設值:llm[/bold]")
     now = datetime.datetime.now()
     target_year_month = f"{now.year}/{now.month:02d}"
     if mode == "llm":
         console.print("[bold]mode: 大型語言模型[/bold]")
         console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值09:00-18:00 原因:忘刷。[/bold]")
         user_message = prompt_with_default("請輸入工時資料")
+        console.print("[bold]思考中...[/bold]")
         user_prompt = prompt_create(user_message=user_message)
 
         # 定義 MCP 伺服器連接資訊
         connection_info = {
             "get_per_day_work_times_by_llm": {
                 "command": "python",
-                "args": ["llm_clockmate.py"],
+                "args": ["clockmate\llm_clockmate.py"],
                 "transport": "stdio",
             },    
         }

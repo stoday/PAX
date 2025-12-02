@@ -12,7 +12,7 @@ pip install git+https://gitlab.com/your-username/clockmate.git
 ### 從本地安裝
 ```bash
 git init
-git pull https://gitlab.com/your-username/clockmate.git ssh
+git pull https://gitlab.com/stoday/clockmate.git ssh
 cd clockmate
 pip install -e .
 ```
@@ -23,12 +23,24 @@ pip install -e .
 
 #### 1. 設置API_KEY
 
-在專案位置新增 `.env`
-並保存API_KEY
+在專案位置新增 `.env` ，包含
+
+```
+# 必要
+GEMINI_API_KEY={your gemini api key}
+
+# 登入相關 Cookie (執行後自動產生)
+ASP_NET_SESSION_ID={your asp net session id}
+CLIENT_TICKET={your client ticket}
+CLIENT_USERNAME={your client username}
+
+# 其他可選設定
+TEL_BEARER_TOKEN={your bearer token}
+TEL_COOKIE_TOKEN={your cookie token}
+```
 
 #### 2. 啟用服務
 ```bash
-cd clockmate
 clockmate
 ```
 

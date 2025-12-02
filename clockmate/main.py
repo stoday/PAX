@@ -305,6 +305,62 @@ def suppress_lib_output():
         sys.stderr = old_err
         devnull.close()
 
+class LoggerWriter:
+    def __init__(self, logger: logging.Logger, level: int = logging.INFO):
+        self.logger = logger
+        self.level = level
+        self._buf = ""
+
+    def write(self, message: str):
+        if not isinstance(message, str):
+            message = str(message)
+        self._buf += message
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            line = line.rstrip("\r")
+            if line:
+                self.logger.log(self.level, line)
+
+    def flush(self):
+        if self._buf:
+            self.logger.log(self.level, self._buf)
+            self._buf = ""
+
+def get_agent_logger() -> logging.Logger:
+    logger = logging.getLogger("clockmate.agent")
+    logger.setLevel(logging.INFO)
+    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+
+    # Ensure file handler exists
+    has_file = any(isinstance(h, logging.FileHandler) for h in logger.handlers)
+    if not has_file:
+        fh = logging.FileHandler("agent_prints.log", encoding="utf-8")
+        fh.setFormatter(fmt)
+        logger.addHandler(fh)
+
+    # Ensure stream-to-server handler exists (server terminal)
+    has_stream = any(isinstance(h, logging.StreamHandler) and getattr(h, 'stream', None) is getattr(sys, "__stdout__", None) for h in logger.handlers)
+    if not has_stream:
+        server_stdout = getattr(sys, "__stdout__", None)
+        if server_stdout is not None:
+            sh = logging.StreamHandler(server_stdout)
+            sh.setFormatter(fmt)
+            logger.addHandler(sh)
+
+    logger.propagate = False
+    return logger
+
+@contextlib.contextmanager
+def redirect_lib_output_to_logger(logger: logging.Logger):
+    old_out, old_err = sys.stdout, sys.stderr
+    try:
+        sys.stdout = LoggerWriter(logger, logging.INFO)
+        sys.stderr = LoggerWriter(logger, logging.ERROR)
+        yield
+    finally:
+        sys.stdout = old_out
+        sys.stderr = old_err
+
 def run_llm_cli(mode="llm", output_stream=None):
     # If a custom output stream is provided, rebind console to it
     if output_stream is not None:
@@ -346,7 +402,8 @@ def run_llm_cli(mode="llm", output_stream=None):
                 },    
             }
 
-            with suppress_lib_output():
+            # 將第三方套件內部 print 轉向到伺服器端 log 檔，不顯示於 SSH 客戶端
+            with redirect_lib_output_to_logger(get_agent_logger()):
                 agent = akasha.agents(
                     model=MODEL,
                     temperature=0.01,

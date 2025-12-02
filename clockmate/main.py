@@ -12,6 +12,9 @@ from rich.table import Table
 from rich import box
 import dotenv
 import os
+import sys
+import logging
+import contextlib
 from .get_token import get_tokens_from_browser
 
 import akasha
@@ -281,6 +284,27 @@ def set_io_hooks(input_func=None, confirm_func=None):
     INPUT_FUNC = input_func
     CONFIRM_FUNC = confirm_func
 
+@contextlib.contextmanager
+def suppress_lib_output():
+    """Temporarily suppress stdout/stderr and lower logging.
+
+    Use to hide noisy prints from third-party libraries without modifying them.
+    """
+    devnull = open(os.devnull, 'w')
+    old_out, old_err = sys.stdout, sys.stderr
+    root_logger = logging.getLogger()
+    old_level = root_logger.level
+    try:
+        sys.stdout = devnull
+        sys.stderr = devnull
+        root_logger.setLevel(logging.CRITICAL)
+        yield
+    finally:
+        root_logger.setLevel(old_level)
+        sys.stdout = old_out
+        sys.stderr = old_err
+        devnull.close()
+
 def run_llm_cli(mode="llm", output_stream=None):
     # If a custom output stream is provided, rebind console to it
     if output_stream is not None:
@@ -289,6 +313,7 @@ def run_llm_cli(mode="llm", output_stream=None):
     display_welcome_banner(plain=False)
     now = datetime.datetime.now()
     target_year_month = f"{now.year}/{now.month:02d}"
+    accumulated_message = ""
     if mode == "llm":
         # console.print("[bold]目前模式: 大型語言模型[/bold]")
         console.print("處理範圍：本月 1 日至今日")
@@ -321,13 +346,14 @@ def run_llm_cli(mode="llm", output_stream=None):
                 },    
             }
 
-            agent = akasha.agents(
-                model=MODEL,
-                temperature=0.01,
-                verbose=False,
-                max_output_tokens=10000
-            )
-            response = agent.mcp_agent(connection_info, user_prompt)
+            with suppress_lib_output():
+                agent = akasha.agents(
+                    model=MODEL,
+                    temperature=0.01,
+                    verbose=False,
+                    max_output_tokens=10000
+                )
+                response = agent.mcp_agent(connection_info, user_prompt)
             parsed_or_msg = parse_llm_output(response)
 
             # 需要重新提問：要求使用者再次輸入非空補充，並合併到累積訊息

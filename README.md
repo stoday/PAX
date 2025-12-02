@@ -37,7 +37,7 @@ TEL_COOKIE_TOKEN={your cookie token}
 clockmate
 ```
 
-### 2. 使用者
+### 2. 使用者(Windows)
 
 #### 1.確認ssh server已開啟後進行連線
 ```bash

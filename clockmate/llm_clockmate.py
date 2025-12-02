@@ -46,7 +46,7 @@ def prompt_create(user_message = ""):
     請依照\{{"reask":"請問..."\}}格式回覆，根據針對簡短輸入的回問策略，產生一個簡潔、禮貌且具體的回問語句，引導使用者提供缺失的關鍵資訊（日期與時間及原因），提供使用者確認:
     
     當例假日時，\{{MM-DD:\{{"arrival_time":"","leave_time":"","reason":"","remark":""\}},...\}} 
-    當使用者訊息有混合工作、公出、受訓的情況，則在reason中輸入\{{MM-DD:\{{"arrival_time":"HH:MM","leave_time":"HH:MM","reason":"混合工作/公出/受訓(依使用者訊息擇一)","remark":""\}},...\}}
+    當使用者訊息有混合工作、公出、受訓的情況，則在reason中輸入\{{MM-DD:\{{"arrival_time":"HH:MM","leave_time":"HH:MM","reason":"混合工作/公出/受訓(擇一)","remark":""\}},...\}}
     其他未提及的日期則填入預設值\{{arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark=""\}}
     """
     return user_prompt

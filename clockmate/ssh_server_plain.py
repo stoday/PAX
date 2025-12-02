@@ -344,7 +344,7 @@ class SSHShell(paramiko.ServerInterface):
         goodbye_text = (
             "\r\n=============================\r\n"
             f"再見, {self.username}！\r\n"
-            "感謝使用 SSH 檔案目錄伺服器\r\n"
+            "感謝使用 Clockmate\r\n"
             "連接即將關閉...\r\n"
             "=============================\r\n\r\n"
         )

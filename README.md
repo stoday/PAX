@@ -28,6 +28,7 @@ pip install -e .
 
 #### 2. 啟用服務
 ```bash
+cd clockmate
 clockmate
 ```
 
@@ -38,17 +39,42 @@ clockmate
 ssh admin@127.0.0.1 -p 2222
 ```
 
+##### 1.1.系統訊息
+如果是第一次連線，系統會彈出以下訊息:
+```
+Are you sure you want to continue connecting (yes/no/[fingerprint])?
+```
+輸入 `yes` 即可
+
+##### 1.2.ssh連線問題
+如果彈出以下訊息
+```
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+Someone could be eavesdropping on you right now (man-in-the-middle attack)!
+It is also possible that a host key has just been changed.
+The fingerprint for the RSA key sent by the remote host is
+SHA256:pHJ/nJNs4mzYo/txygFSi7seRAyYFi3GnEdDQJj6Hxk.
+Please contact your system administrator.
+Add correct host key in C:\\Users\\User/.ssh/known_hosts to get rid of this message.
+Offending RSA key in C:\\Users\\User/.ssh/known_hosts:6
+Host key for [127.0.0.1]:2222 has changed and you have requested strict checking.
+Host key verification failed.
+```
+只需輸入以下指令後再次嘗試連線即可
+```bash
+ssh-keygen -R "[127.0.0.1]:2222"
+ssh admin@127.0.0.1 -p 2222
+```
+
 #### 2.輸入密碼
 ```bash
 password123
 ```
-#### 3.待看到成功連線畫面後執行Clockmate
-```bash
-clockmate 
-```
-預設為使用大型語言模型模式 可在指令後加上 `-m manual` 或 `--mode manual` 設為手動模式
 
-#### 4.看到Clockmate介面後，即可直接輸入出勤狀況並等待工時資料生成
+#### 成功登入後即可看到Clockmate介面，直接輸入出勤狀況並等待資料生成
 
 ## 功能特色
 

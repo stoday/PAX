@@ -8,7 +8,7 @@ import akasha
 import dotenv
 dotenv.load_dotenv()
 from mcp.server.fastmcp import FastMCP  # noqa: E402
-mcp = FastMCP("get_per_day_work_times_by_llm")
+mcp = FastMCP("parse_llm_output")
 
 
 def get_weekend():
@@ -43,15 +43,14 @@ def prompt_create(user_message = ""):
     優先根據使用者訊息的要求，將每日的上下班時間、未打卡事由、備註等資訊整理成 JSON 格式。
     若使用者訊息為空白，則直接填入預設值
     若使用者訊息有簡短字句但過於簡短以致無法確認意圖(如:10點，受訓、忘刷)，
-    請依照以下JSON格式回覆，並在response向使用者確認，以預設值:"{today} 09:00-18:00 原因:忘刷"為基礎，並以使用者訊息中所提供的資訊進行替換，提供使用者確認:
-    \{{"reask":"response"\}}
-    當例假日時，\{{MM-DD:\{{"arrival_time":"","leave_time":"","reason":"","remark":""\}},...\}}
-    當使用者訊息有混合工作、公出、受訓的情況，則在reason中輸入\{{MM-DD:\{{"arrival_time":"HH:MM","leave_time":"HH:MM","reason":"混合工作/公出/受訓","remark":""\}},...\}}
+    請依照\{{"reask":"請問..."\}}格式回覆，根據針對簡短輸入的回問策略，產生一個簡潔、禮貌且具體的回問語句，引導使用者提供缺失的關鍵資訊（日期或時間），提供使用者確認:
+    
+    當例假日時，\{{MM-DD:\{{"arrival_time":"","leave_time":"","reason":"","remark":""\}},...\}} 
+    當使用者訊息有混合工作、公出、受訓的情況，則在reason中輸入\{{MM-DD:\{{"arrival_time":"HH:MM","leave_time":"HH:MM","reason":"混合工作/公出/受訓(依使用者訊息擇一)","remark":""\}},...\}}
     其他未提及的日期則填入預設值\{{arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark=""\}}
     """
     return user_prompt
 
-@mcp.tool()
 def get_per_day_work_times_by_llm(
         model: str = "gemini:gemini-2.5-flash",
         user_prompt: str = "",
@@ -146,6 +145,7 @@ def _clean_and_parse(raw_text: str) -> Tuple[bool, Dict[str, Any]]:
     except Exception:
         return False, raw_text
 
+@mcp.tool()
 def parse_llm_output(raw_text: str) -> Union[str, Dict[str, Dict[str, str]]]:
     """
     解析模型輸出：

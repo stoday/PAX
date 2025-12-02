@@ -314,7 +314,7 @@ def run_llm_cli(mode="llm", output_stream=None):
 
             # 定義 MCP 伺服器連接資訊
             connection_info = {
-                "get_per_day_work_times_by_llm": {
+                "parse_llm_output": {
                     "command": "python",
                     "args": ["clockmate\\llm_clockmate.py"],
                     "transport": "stdio",

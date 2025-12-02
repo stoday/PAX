@@ -12,6 +12,8 @@ from rich.table import Table
 from rich import box
 import dotenv
 import os
+import logging
+from pathlib import Path
 
 # import akasha
 # MODEL = "gemini:gemini-2.5-flash"
@@ -25,6 +27,18 @@ dotenv.load_dotenv()
 
 BASE_TIMESHEET_URL = "https://hrwt.iii.org.tw/TSM/MyWorkTime.aspx"
 TIMESHEET_ORIGIN = "https://hrwt.iii.org.tw"
+LOG_DIR = Path(__file__).resolve().parent / "logs"
+LOG_FILE = LOG_DIR / f"access_hr_web_tool_{datetime.datetime.now().strftime('%Y%m%d')}.log"
+
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+logging.basicConfig(
+    filename=str(LOG_FILE),
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    encoding="utf-8",
+    force=True,  # Ensure file handler is set even if logging was configured elsewhere
+)
 console = Console()
 # figlet = Figlet(font="slant")
 
@@ -49,13 +63,14 @@ def generate_form_data_for_target_dates(year_month=None,
     """
     # 先生成至今的所有日期資料
     full_form_data = generate_form_util_today(year_month=year_month,
-                                        default_work_times=default_work_times)
+                                       default_work_times=default_work_times)
     
     # 根據目標日期來更新相關欄位
     if target_dates:
         for date_str, times in target_dates.items():
             if len(date_str) != 8 or not date_str.isdigit():
-                console.print(f"[red]⚠️ 日期格式錯誤: {date_str}，應為 YYYYMMDD 格式，跳過此日期。[/red]")
+                # console.print(f"[red]⚠️ 日期格式錯誤: {date_str}，應為 YYYYMMDD 格式，跳過此日期。[/red]")
+                logging.warning("日期格式錯誤: %s，應為 YYYYMMDD 格式，跳過此日期。", date_str)
                 continue
             # 更新對應欄位
             full_form_data[f"ctl00$ContentPlaceHolder1$txtArr_{date_str}"] = times.get('arrival_time', '')
@@ -66,7 +81,8 @@ def generate_form_data_for_target_dates(year_month=None,
         return full_form_data
     
     else:
-        console.print("[yellow]⚠️ 未提供目標日期資料，無法更新表單。[/yellow]")
+        # console.print("[yellow]⚠️ 未提供目標日期資料，無法更新表單。[/yellow]")
+        logging.warning("未提供目標日期資料，無法更新表單。")
         return full_form_data
 
 
@@ -158,11 +174,11 @@ def generate_form_util_today(year_month=None,
     form_data["ctl00$ContentPlaceHolder1$HideStTimes"] = ""
     form_data["ctl00$ContentPlaceHolder1$HidEdTimes"] = ""
     
-    console.print(f"[bold green]📅 生成 {year_month} 的表單資料[/bold green]")
-    console.print(f"[cyan]📊 工作日: {len(work_days)} 天[/cyan]")
-    console.print(f"[cyan]🏖️ 假日: {len(holidays)} 天[/cyan]")
-    console.print(f"[magenta]⏰ 預設上班時間: {default_work_times['arrival_time']}[/magenta]")
-    console.print(f"[magenta]⏰ 預設下班時間: {default_work_times['leave_time']}[/magenta]")
+    # console.print(f"[bold green]📅 生成 {year_month} 的表單資料[/bold green]")
+    # console.print(f"[cyan]📊 工作日: {len(work_days)} 天[/cyan]")
+    # console.print(f"[cyan]🏖️ 假日: {len(holidays)} 天[/cyan]")
+    # console.print(f"[magenta]⏰ 預設上班時間: {default_work_times['arrival_time']}[/magenta]")
+    # console.print(f"[magenta]⏰ 預設下班時間: {default_work_times['leave_time']}[/magenta]")
     
     return form_data
 
@@ -348,8 +364,8 @@ def run_cli(output_stream=None):
     post_headers = get_post_headers(target_year_month)
     submit_url = build_timesheet_url(target_year_month)
     response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
-    print('response status: ' + str(response.status_code))
-    print('response text: ' + response.text)
+    logging.info("response status: %s", response.status_code)
+    logging.info("response text: %s", response.text)
 
     # console.rule("[bold green]表單資料已完成建立[/bold green]")
     # # if fetch_hidden and session:
@@ -421,8 +437,8 @@ def process_headers_cookies(year_month=None):
         "sec-ch-ua-platform": platform_info
     }
     
-    console.print(f"[bold cyan]🌐 使用動態 User-Agent:[/bold cyan] {user_agent}")
-    console.print(f"[bold cyan]💻 平台資訊:[/bold cyan] {platform_info}")
+    # console.print(f"[bold cyan]🌐 使用動態 User-Agent:[/bold cyan] {user_agent}")
+    # console.print(f"[bold cyan]💻 平台資訊:[/bold cyan] {platform_info}")
     
     # 設定重要的認證 cookies
     cookie_values = {
@@ -430,34 +446,41 @@ def process_headers_cookies(year_month=None):
         'clientTicket': os.getenv("CLIENT_TICKET", ""),
         'clientUserName': os.getenv("CLIENT_USERNAME", ""),
     }
-
+    
     missing_cookies = [name for name, value in cookie_values.items() if not value]
     if missing_cookies:
-        console.print(f"[yellow].env 中缺少 cookie 值: {', '.join(missing_cookies)}，請先執行 get_token.py[/yellow]")
+        # console.print(f"[yellow].env 中缺少 cookie 值: {', '.join(missing_cookies)}，請先執行 get_token.py[/yellow]")
+        logging.warning(".env 中缺少 cookie 值: %s，請先執行 get_token.py", ", ".join(missing_cookies))
     else:
-        console.print("[green]已從 .env 讀取登入 cookie。[/green]")
+        # console.print("[green]已從 .env 讀取登入 cookie。[/green]")
+        logging.info("已從 .env 讀取登入 cookie。")
 
     for name, value in cookie_values.items():
         if value:
             session.cookies.set(name, value, domain='hrwt.iii.org.tw')
     
     target_url = build_timesheet_url(year_month)
-    console.print(f"[cyan]正在獲取最新的頁面資料: {target_url}[/cyan]")
+    # console.print(f"[cyan]正在獲取最新的頁面資料: {target_url}[/cyan]")
+    logging.info("正在獲取最新的頁面資料: %s", target_url)
     
     # 發送 GET 請求取得頁面
     response = session.get(target_url, headers=headers)
     
     if response.status_code != 200:
         console.print(f"[bold red]無法訪問頁面，狀態碼: {response.status_code}[/bold red]")
+        logging.error("無法訪問頁面，狀態碼: %s", response.status_code)
         return None, None
     
-    console.print(f"[green]成功取得頁面，長度: {len(response.text)} 字元[/green]")
+    # console.print(f"[green]成功取得頁面，長度: {len(response.text)} 字元[/green]")
+    logging.info("成功取得頁面，長度: %s 字元", len(response.text))
     
     # 顯示從伺服器收到的 cookies
     if response.cookies:
-        console.print("[yellow]🍪 從伺服器收到的 cookies:[/yellow]")
+        # console.print("[yellow]🍪 從伺服器收到的 cookies:[/yellow]")
+        logging.info("從伺服器收到的 cookies:")
         for cookie in session.cookies:
-            console.print(f"  {cookie.name}={cookie.value}")
+            # console.print(f"  {cookie.name}={cookie.value}")
+            logging.info("  %s=%s", cookie.name, cookie.value)
     
     # 解析 HTML 取得隱藏欄位
     soup = BeautifulSoup(response.text, 'html.parser')
@@ -468,17 +491,18 @@ def process_headers_cookies(year_month=None):
     event_validation = soup.find('input', {'name': '__EVENTVALIDATION'})
     
     if not all([viewstate, viewstate_generator, event_validation]):
-        breakpoint()
-        console.print("[bold red]❌ 無法找到必要的隱藏欄位，可能需要重新登入[/bold red]")
-        console.print(f"[red]找到 __VIEWSTATE: {viewstate is not None}[/red]")
-        console.print(f"[red]找到 __VIEWSTATEGENERATOR: {viewstate_generator is not None}[/red]")
-        console.print(f"[red]找到 __EVENTVALIDATION: {event_validation is not None}[/red]")
+        # console.print("[bold red]❌ 無法找到必要的隱藏欄位，可能需要重新登入[/bold red]")
+        # console.print(f"[red]找到 __VIEWSTATE: {viewstate is not None}[/red]")
+        # console.print(f"[red]找到 __VIEWSTATEGENERATOR: {viewstate_generator is not None}[/red]")
+        # console.print(f"[red]找到 __EVENTVALIDATION: {event_validation is not None}[/red]")
+        logging.error("無法找到必要的隱藏欄位，可能需要重新登入")
         return None, None, None, None
     
-    console.print("[bold green]✅ 成功取得所有隱藏欄位[/bold green]")
-    console.print(f"[green]__VIEWSTATE 長度: {len(viewstate['value'])}[/green]")
-    console.print(f"[green]__VIEWSTATEGENERATOR: {viewstate_generator['value']}[/green]")
-    console.print(f"[green]__EVENTVALIDATION 長度: {len(event_validation['value'])}[/green]")
+    # console.print("[bold green]✅ 成功取得所有隱藏欄位[/bold green]")
+    # console.print(f"[green]__VIEWSTATE 長度: {len(viewstate['value'])}[/green]")
+    # console.print(f"[green]__VIEWSTATEGENERATOR: {viewstate_generator['value']}[/green]")
+    # console.print(f"[green]__EVENTVALIDATION 長度: {len(event_validation['value'])}[/green]")
+    logging.info("成功取得所有隱藏欄位")
 
     return viewstate, viewstate_generator, event_validation, session
 
@@ -514,18 +538,18 @@ def get_fresh_form_for_util_today(year_month=None, work_times=None):
     
     form_data = fresh_form_data
     if not form_data:
-        print("無法生成表單資料，請稍後再試。")
+        logging.error("無法生成表單資料，請稍後再試。")
         # console.print("[bold red]無法生成表單資料，請稍後再試。[/bold red]")
         return
 
     post_headers = get_post_headers(year_month)
     submit_url = build_timesheet_url(year_month)
     response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
-    print('response status: ' + str(response.status_code))
-    print('response text: ' + response.text)
+    logging.info("response status: %s", response.status_code)
+    logging.info("response text: %s", response.text)
 
     return 'response status: ' + str(response.status_code) + \
-        '\n' + 'response text: ' + response.text
+        '\n' + 'response text: ' + str(response.text)
 
 
 def get_fresh_form_for_target_dates(year_month=None, target_dates=None):
@@ -568,11 +592,11 @@ def get_fresh_form_for_target_dates(year_month=None, target_dates=None):
     post_headers = get_post_headers(year_month)
     submit_url = build_timesheet_url(year_month)
     response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
-    print('response status: ' + str(response.status_code))
-    print('response text: ' + response.text)
+    logging.info("response status: %s", response.status_code)
+    logging.info("response text: %s", response.text)
     
     return 'response status: ' + str(response.status_code) + \
-        '\n' + 'response text: ' + response.text
+        '\n' + 'response text: ' + str(response.text)
 
 
 # if __name__ == "__main__":

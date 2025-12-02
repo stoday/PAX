@@ -225,7 +225,7 @@ class SSHShell(paramiko.ServerInterface):
                 if not s:
                     return
                 try:
-                    data = s.replace('\n', '\r\n') if isinstance(s, str) else s
+                    data = str(s).replace('\n', '\r\n')
                     self.shell_ref.channel.send(data.encode('utf-8') if isinstance(data, str) else data)
                 except Exception:
                     pass

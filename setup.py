@@ -41,8 +41,6 @@ setup(
         "console_scripts": [
             # 主命令：直接啟動 SSH 服務（封裝於套件內路徑）
             "clockmate=clockmate.start_services:start_ssh_server",
-            # 取得 Token 的輔助命令（封裝於套件內路徑）
-            "clockmate-token=clockmate.get_token:get_tokens_from_browser",
         ],
     },
     include_package_data=True,

@@ -16,21 +16,22 @@ import sys
 import logging
 import contextlib
 import akasha
-MODEL = "gemini:gemini-2.5-flash"
-try:
-    from clockmate.llm_clockmate import prompt_create, parse_llm_output
-    from clockmate.get_token import get_tokens_from_browser
-except:
-    from llm_clockmate import prompt_create, parse_llm_output
-    from get_token import get_tokens_from_browser
 
 # 載入環境變數
 dotenv.load_dotenv()
 
+MODEL = "gemini:gemini-2.5-flash"
 BASE_TIMESHEET_URL = "https://hrwt.iii.org.tw/TSM/MyWorkTime.aspx"
 TIMESHEET_ORIGIN = "https://hrwt.iii.org.tw"
 console = Console()
 figlet = Figlet(font="slant")
+# 會話初始化旗標：確保特定初始化只在 SSH 連線期間執行一次
+SESSION_INITIALIZED = False
+
+def reset_session_state():
+    """重置會話初始化狀態（供 SSH 連線開始時呼叫）。"""
+    global SESSION_INITIALIZED
+    SESSION_INITIALIZED = False
 
 # 可選的 I/O 掛勾（供 SSH 路徑覆寫互動輸入確認）
 INPUT_FUNC = None  # Callable[[str, object], str]
@@ -362,11 +363,17 @@ def redirect_lib_output_to_logger(logger: logging.Logger):
         sys.stderr = old_err
 
 def run_llm_cli(mode="llm", output_stream=None):
+    from clockmate import prompt_create, parse_llm_output
     # If a custom output stream is provided, rebind console to it
     if output_stream is not None:
         set_output_stream(output_stream)
-    # 顯示 Rich 渲染的 banner
-    display_welcome_banner(plain=False)
+    # 首次執行：顯示 banner 並取得 tokens（僅在本次 SSH 連線期間一次）
+    global SESSION_INITIALIZED
+    if not SESSION_INITIALIZED:
+        display_welcome_banner(plain=False)
+        from clockmate import get_tokens_from_browser
+        get_tokens_from_browser()
+        SESSION_INITIALIZED = True
     now = datetime.datetime.now()
     target_year_month = f"{now.year}/{now.month:02d}"
     accumulated_message = ""
@@ -467,7 +474,7 @@ def run_llm_cli(mode="llm", output_stream=None):
         console.print("[yellow]已取消操作。[/yellow]")
         return
     
-    get_tokens_from_browser()
+    # tokens 已在首次顯示 banner 時取得，避免重複
 
     form_data, session = get_fresh_form_llm_data(target_year_month, final_work_time, mode=mode)
     if not form_data:

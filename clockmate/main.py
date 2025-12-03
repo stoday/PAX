@@ -400,13 +400,13 @@ def run_llm_cli(mode="llm", output_stream=None):
             console.print("[bold]思考中...[/bold]")
             user_prompt = prompt_create(user_message=accumulated_message)
 
-            # 定義 MCP 伺服器連接資訊
+            # 定義 MCP 伺服器連接資訊（以模組方式啟動，支援安裝版與原始碼）
             connection_info = {
                 "parse_llm_output": {
                     "command": "python",
-                    "args": ["clockmate\\llm_clockmate.py"],
+                    "args": ["-m", "clockmate.llm_clockmate"],
                     "transport": "stdio",
-                },    
+                },
             }
 
             # 將第三方套件內部 print 轉向到伺服器端 log 檔，不顯示於 SSH 客戶端

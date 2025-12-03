@@ -15,14 +15,14 @@ import os
 import sys
 import logging
 import contextlib
-from clockmate.get_token import get_tokens_from_browser
-
 import akasha
 MODEL = "gemini:gemini-2.5-flash"
 try:
     from clockmate.llm_clockmate import prompt_create, parse_llm_output
+    from clockmate.get_token import get_tokens_from_browser
 except:
     from llm_clockmate import prompt_create, parse_llm_output
+    from get_token import get_tokens_from_browser
 
 # 載入環境變數
 dotenv.load_dotenv()

@@ -206,6 +206,7 @@ class SSHShell(paramiko.ServerInterface):
             def __init__(self, channel):
                 self.channel = channel
                 self.buffer = b""
+                self._current_line = []
             def _fill(self):
                 if self.channel.closed:
                     return False
@@ -213,17 +214,25 @@ class SSHShell(paramiko.ServerInterface):
                     chunk = self.channel.recv(1)
                     if not chunk:
                         return False
-                    # Echo behavior for better UX
+                    # 安全 echo：僅回顯可見字元與換行，忽略控制字元避免破壞介面
                     try:
-                        ch = chunk
-                        if ch == b"\r":
-                            # Normalize CR to CRLF on echo
+                        b = chunk[0]
+                        if chunk == b"\r":
+                            # Enter：換行並重置當前輸入緩衝
                             self.channel.send(b"\r\n")
-                        elif ch in (b"\x7f", b"\x08"):
-                            # Backspace: erase a char visually
-                            self.channel.send(b"\x08 \x08")
+                            self._current_line.clear()
+                        elif b in (0x08, 0x7F):
+                            # Backspace：只在有字元時刪除，不影響既有 UI
+                            if self._current_line:
+                                self._current_line.pop()
+                                self.channel.send(b"\x08 \x08")
+                        elif 32 <= b <= 126:
+                            # 可見 ASCII：追加並顯示
+                            self._current_line.append(chr(b))
+                            self.channel.send(chunk)
                         else:
-                            self.channel.send(ch)
+                            # 其他控制碼（如 ESC/方向鍵）忽略
+                            pass
                     except Exception:
                         pass
                     self.buffer += chunk

@@ -38,6 +38,8 @@ __all__ = [
     "build_timesheet_url",
     "prompt_create",
     "parse_llm_output",
+    "get_tokens_from_browser",
+    "run_cli",
 ]
 """
 ClockMate - 工時填報助手
@@ -50,11 +52,9 @@ __email__ = "support@clockmate.com"
 
 # 延遲匯入避免循環依賴
 def run_cli():
-    from main import run_llm_cli as _run_cli
+    from .main import run_llm_cli as _run_cli
     return _run_cli()
 
 def get_tokens_from_browser():
-    from get_token import get_tokens_from_browser as _get_tokens
+    from .get_token import get_tokens_from_browser as _get_tokens
     return _get_tokens()
-
-__all__ = ["main", "run_ssh_server", 'run_llm_cli', 'get_tokens_from_browser']

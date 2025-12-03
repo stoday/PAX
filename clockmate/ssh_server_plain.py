@@ -182,7 +182,7 @@ class SSHShell(paramiko.ServerInterface):
         """在 SSH channel 中執行 ClockMate CLI，橋接 stdin/stdout。
         回傳 True 代表完成並可繼續，False 代表使用者要求離開。
         """
-        from .main import run_llm_cli, set_output_stream, set_io_hooks
+        from clockmate.main import run_llm_cli, set_output_stream, set_io_hooks
 
         class ChannelWriter:
             def __init__(self, shell_ref):

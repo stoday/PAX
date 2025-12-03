@@ -15,12 +15,12 @@ import os
 import sys
 import logging
 import contextlib
-from .get_token import get_tokens_from_browser
+from clockmate.get_token import get_tokens_from_browser
 
 import akasha
 MODEL = "gemini:gemini-2.5-flash"
 try:
-    from .llm_clockmate import prompt_create, parse_llm_output
+    from clockmate.llm_clockmate import prompt_create, parse_llm_output
 except:
     from llm_clockmate import prompt_create, parse_llm_output
 

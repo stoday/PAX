@@ -412,15 +412,6 @@ def run_llm_cli(mode="llm", output_stream=None):
             console.print("[bold]思考中...[/bold]")
             user_prompt = prompt_create(user_message=accumulated_message)
 
-            # # 定義 MCP 伺服器連接資訊（以模組方式啟動，支援安裝版與原始碼）
-            # connection_info = {
-            #     "parse_llm_output": {
-            #         "command": "python",
-            #         "args": ["-m", "clockmate.llm_clockmate"],
-            #         "transport": "stdio",
-            #     },
-            # }
-
             # 將第三方套件內部 print 轉向到伺服器端 log 檔，不顯示於 SSH 客戶端
             # with redirect_lib_output_to_logger(get_agent_logger()):
                 # agent = akasha.agents(
@@ -430,6 +421,7 @@ def run_llm_cli(mode="llm", output_stream=None):
                 #     max_output_tokens=10000
                 # )
                 # response = agent.mcp_agent(connection_info, user_prompt)
+                
             asker = akasha.ask(
                 model=MODEL,
                 max_input_tokens=8000,
@@ -437,58 +429,77 @@ def run_llm_cli(mode="llm", output_stream=None):
                 temperature=1.0,
             )
 
-            response = asker(prompt=user_prompt,
-                             temperature=0.8)
+            # response = asker(prompt=user_prompt,
+            #                  temperature=0.8)
+            
+            # 定義 MCP 伺服器連接資訊（以模組方式啟動，支援安裝版與原始碼）
+            connection_info = {
+                "submit_work_times": {
+                    "command": "python",
+                    "args": ["-X", "utf8", "-m", "clockmate.llm_clockmate"],
+                    "transport": "stdio",
+                },
+            }
+            
+            agent = akasha.agents(
+                model=MODEL,
+                temperature=0.01,
+                verbose=False,
+                max_output_tokens=10000
+            )
+            
+            response = agent.mcp_agent(connection_info, user_prompt)
+            console.print(response)
 
-            if isinstance(json_repair.loads(response), dict):
-                job_working_time = response
-                response = asker(prompt="你的任務事回應使用者之前的需求，你已經做完了。活潑的說明已經幫使用者填完工作時間")
-                console.print(f"[dim]LLM 回覆：{response}[/dim]")
-                final_work_time = job_working_time
+            # if isinstance(json_repair.loads(response), dict):
+            #     job_working_time = response
+            #     response = asker(prompt="你的任務是回應使用者之前的需求，你已經做完了。活潑的說明已經幫使用者填完工作時間")
+            #     console.print(f"[dim]LLM 回覆：{response}[/dim]")
+            #     final_work_time = job_working_time
 
-                form_data, session = get_fresh_form_llm_data(target_year_month, final_work_time, mode=mode)
-                if not form_data:
-                    console.print("[bold red]無法生成表單資料，請稍後再試。[/bold red]")
-                    return
+            #     form_data, session = get_fresh_form_llm_data(target_year_month, final_work_time, mode=mode)
+            #     if not form_data:
+            #         console.print("[bold red]無法生成表單資料，請稍後再試。[/bold red]")
+            #         return
 
-                console.rule("[bold green]表單資料已完成建立[/bold green]")
-                # if fetch_hidden and session:
-                if session:
-                    if prompt_yes_no("需要立即提交表單嗎？", True):
-                        console.rule("[bold magenta]提交表單[/bold magenta]")
-                        console.print("📝 正在提交表單...")
-                        post_headers = get_post_headers(target_year_month)
-                        console.print(f"[dim]📋 使用 headers: {list(post_headers.keys())}[/dim]")
+            #     console.rule("[bold green]表單資料已完成建立[/bold green]")
+            #     # if fetch_hidden and session:
+            #     if session:
+            #         if prompt_yes_no("需要立即提交表單嗎？", True):
+            #             console.rule("[bold magenta]提交表單[/bold magenta]")
+            #             console.print("📝 正在提交表單...")
+            #             post_headers = get_post_headers(target_year_month)
+            #             console.print(f"[dim]📋 使用 headers: {list(post_headers.keys())}[/dim]")
 
-                        submit_url = build_timesheet_url(target_year_month)
-                        response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
+            #             submit_url = build_timesheet_url(target_year_month)
+            #             response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
 
-                        console.print(f"[bold green]✅ 提交完成！狀態碼: {response.status_code}[/bold green]")
+            #             console.print(f"[bold green]✅ 提交完成！狀態碼: {response.status_code}[/bold green]")
 
-                        if response.status_code == 302:
-                            location = response.headers.get('Location', '未知')
-                            console.print(f"[cyan]🔄 重定向到: {location}[/cyan]")
+            #             if response.status_code == 302:
+            #                 location = response.headers.get('Location', '未知')
+            #                 console.print(f"[cyan]🔄 重定向到: {location}[/cyan]")
 
-                            if 'Default.aspx' not in location:
-                                console.print("[bold green]🎉 表單提交可能成功！[/bold green]")
-                            else:
-                                console.print("[bold red]❌ 被重定向到登入頁面，可能需要重新認證[/bold red]")
-                        elif response.status_code == 200:
-                            console.print("[cyan]📄 收到回應內容:[/cyan]")
-                            console.print(response.text[:300] + "..." if len(response.text) > 300 else response.text)
-                        else:
-                            console.print(f"[yellow]❓ 未預期的狀態碼: {response.status_code}[/yellow]")
-                            console.print(f"[yellow]回應內容: {response.text[:200]}[/yellow]")
+            #                 if 'Default.aspx' not in location:
+            #                     console.print("[bold green]🎉 表單提交可能成功！[/bold green]")
+            #                 else:
+            #                     console.print("[bold red]❌ 被重定向到登入頁面，可能需要重新認證[/bold red]")
+            #             elif response.status_code == 200:
+            #                 console.print("[cyan]📄 收到回應內容:[/cyan]")
+            #                 console.print(response.text[:300] + "..." if len(response.text) > 300 else response.text)
+            #             else:
+            #                 console.print(f"[yellow]❓ 未預期的狀態碼: {response.status_code}[/yellow]")
+            #                 console.print(f"[yellow]回應內容: {response.text[:200]}[/yellow]")
 
-                        console.print(f"[dim]\n📊 回應標頭: {dict(response.headers)}[/dim]")
-                    else:
-                        console.print("[green]👌 表單資料已準備好，您可以稍後手動提交。[/green]")
+            #             console.print(f"[dim]\n📊 回應標頭: {dict(response.headers)}[/dim]")
+            #         else:
+            #             console.print("[green]👌 表單資料已準備好，您可以稍後手動提交。[/green]")
                 
-                else:
-                    console.print("[blue]📦 表單資料已生成，請記得自行補上隱藏欄位後再提交。[/blue]")
+            #     else:
+            #         console.print("[blue]📦 表單資料已生成，請記得自行補上隱藏欄位後再提交。[/blue]")
                     
-            else:
-                console.print('*** ' + response)
+            # else:
+            #     console.print(response)
         
 def get_fresh_form_llm_data(year_month=None, work_times=None,mode="local"):
     """自動從網頁抓取最新的隱藏欄位和 headers，並生成表單資料"""
@@ -518,8 +529,8 @@ def get_fresh_form_llm_data(year_month=None, work_times=None,mode="local"):
         "sec-ch-ua-platform": platform_info
     }
     
-    console.print(f"[bold cyan]🌐 使用動態 User-Agent:[/bold cyan] {user_agent}")
-    console.print(f"[bold cyan]💻 平台資訊:[/bold cyan] {platform_info}")
+    console.print(f"[bold cyan] 使用動態 User-Agent:[/bold cyan] {user_agent}")
+    console.print(f"[bold cyan] 平台資訊:[/bold cyan] {platform_info}")
     
     # 設定重要的認證 cookies
     cookie_values = {

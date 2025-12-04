@@ -486,7 +486,6 @@ class SSHServer:
             server_socket.listen(5)
             
             print(f"SSH 服務器啟動於 {self.host}:{self.port}")
-            print(f"FastAPI 後端: {self.fastapi_url}")
             print("等待客戶端連接...")
             
             while True:

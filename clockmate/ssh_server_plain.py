@@ -299,7 +299,28 @@ class SSHShell(paramiko.ServerInterface):
                 line = sys.stdin.readline()
                 if line is None:
                     return default_val or ""
-                line = line.rstrip('\r\n')
+                # 正規化：移除零寬度與格式控制字元、替換 NBSP、去除 CR/LF
+                try:
+                    import unicodedata
+                    def _normalize_text(s: str) -> str:
+                        s = s.replace('\r', '').replace('\n', '')
+                        # 將 NBSP 轉成一般空白
+                        s = s.replace('\u00A0', ' ')
+                        # 移除 BOM 與零寬度/格式控制字元
+                        remove_chars = {
+                            '\ufeff',  # BOM / ZWNBSP
+                            '\u200b', '\u200c', '\u200d',  # ZWSP, ZWNJ, ZWJ
+                            '\u2060',  # WORD JOINER
+                            '\u200e', '\u200f',  # LRM, RLM
+                        }
+                        for ch in remove_chars:
+                            s = s.replace(ch, '')
+                        # 移除其餘一般控制/格式字元
+                        s = ''.join(c for c in s if unicodedata.category(c) not in ('Cf', 'Cc'))
+                        return s
+                    line = _normalize_text(line)
+                except Exception:
+                    line = line.rstrip('\r\n')
                 if line.strip().lower() in ("exit", "quit"):
                     self._exit_requested = True
                     raise ExitRequested()
@@ -318,6 +339,20 @@ class SSHShell(paramiko.ServerInterface):
                 ans = sys.stdin.readline()
                 if not ans:
                     return default
+                # 正規化輸入同 ssh_input
+                try:
+                    import unicodedata
+                    def _normalize_text(s: str) -> str:
+                        s = s.replace('\r', '').replace('\n', '')
+                        s = s.replace('\u00A0', ' ')
+                        remove_chars = {'\ufeff','\u200b','\u200c','\u200d','\u2060','\u200e','\u200f'}
+                        for ch in remove_chars:
+                            s = s.replace(ch, '')
+                        s = ''.join(c for c in s if unicodedata.category(c) not in ('Cf', 'Cc'))
+                        return s
+                    ans = _normalize_text(ans)
+                except Exception:
+                    ans = ans.strip()
                 ans = ans.strip().lower()
                 if ans in ("exit", "quit"):
                     self._exit_requested = True

@@ -230,9 +230,9 @@ def display_welcome_banner(plain: bool = False):
 def prompt_with_default(prompt_text, default_value=None):
     # 若有自訂輸入掛勾，使用簡單文字提示
     if default_value is not None:
-        prompt_plain = f"{prompt_text} 預設值: [{default_value}]: "
+        prompt_plain = f"{prompt_text} 預設值: [{default_value}]:"
     else:
-        prompt_plain = f"{prompt_text}: "
+        prompt_plain = f"{prompt_text}:"
     if INPUT_FUNC:
         try:
             val = INPUT_FUNC(prompt_plain, default_value)
@@ -368,12 +368,13 @@ def run_llm_cli(mode="llm", output_stream=None):
     if output_stream is not None:
         set_output_stream(output_stream)
     # 首次執行：顯示 banner 並取得 tokens（僅在本次 SSH 連線期間一次）
-    global SESSION_INITIALIZED
-    if not SESSION_INITIALIZED:
-        display_welcome_banner(plain=False)
-        from clockmate import get_tokens_from_browser
-        get_tokens_from_browser()
-        SESSION_INITIALIZED = True
+    # global SESSION_INITIALIZED
+    # if not SESSION_INITIALIZED:
+    #     display_welcome_banner(plain=False)
+    #     with redirect_lib_output_to_logger(get_agent_logger()):
+    #         from clockmate import get_tokens_from_browser
+    #         get_tokens_from_browser()
+    #     SESSION_INITIALIZED = True
     now = datetime.datetime.now()
     target_year_month = f"{now.year}/{now.month:02d}"
     accumulated_message = ""
@@ -384,16 +385,18 @@ def run_llm_cli(mode="llm", output_stream=None):
         console.print("預設原因：忘刷")
         console.print(" - 直接按 [Enter]：將使用預設值")
         console.print(" - 輸入 'exit'： 退出系統")
-        console.print("[bold]請輸入工時資料[/bold]")
+        console.print("[bold]請問我可以為您做什麼呢[/bold]")
 
         # 迴圈：若 LLM 回覆 reask，提示並請使用者重新輸入
         accumulated_message = ""
         # 首次或累積後的訊息提示
         user_message = prompt_with_default(">")
+        # 顯示使用者剛輸入的內容，避免某些 SSH/IME 不回顯中文
+        console.print(f"[dim]您輸入：{user_message}[/dim]")
         while True:
             # 將使用者輸入累積成單一訊息（保留上下文）
             if accumulated_message:
-                accumulated_message = f"{accumulated_message}\n{user_message}".strip()
+                accumulated_message = f"{user_message}\n{accumulated_message}".strip()
             else:
                 accumulated_message = user_message.strip()
 
@@ -418,7 +421,13 @@ def run_llm_cli(mode="llm", output_stream=None):
                     max_output_tokens=10000
                 )
                 response = agent.mcp_agent(connection_info, user_prompt)
-            parsed_or_msg = parse_llm_output(response)
+
+            try:
+                import json
+                parsed_or_msg = json.loads(response)
+            except Exception:
+                parsed_or_msg = response
+            # parsed_or_msg = parse_llm_output(response)
 
             # 需要重新提問：要求使用者再次輸入非空補充，並合併到累積訊息
             if isinstance(parsed_or_msg, dict) and 'reask' in parsed_or_msg:
@@ -426,8 +435,9 @@ def run_llm_cli(mode="llm", output_stream=None):
                 # 強制再次輸入不得為空
                 while True:
                     supplement = prompt_with_default("> (請補充說明，不可空白)")
+                    console.print(f"[dim]您輸入：{supplement}[/dim]")
                     if supplement.strip():
-                        accumulated_message = f"{accumulated_message}\n{parsed_or_msg['reask']}\n{supplement.strip()}".strip()
+                        accumulated_message = f"{accumulated_message}\nAI:{parsed_or_msg['reask']}\nuser:{supplement.strip()}".strip()
                         break
                     else:
                         console.print("[yellow]輸入不可為空，請再試一次。[/yellow]")
@@ -435,6 +445,11 @@ def run_llm_cli(mode="llm", output_stream=None):
                 continue
 
             # 非 reask：若為文字（錯誤/無關），結束此次執行
+            if isinstance(parsed_or_msg, dict) and 'message' in parsed_or_msg:
+                if set(parsed_or_msg.keys()) == {"message"} and isinstance(parsed_or_msg.get("message"), str):
+                    msg = parsed_or_msg.get("message")
+                    console.print(f"[yellow]{msg}[/yellow]")
+                    return
             if isinstance(parsed_or_msg, str):
                 console.print(f"[yellow]{parsed_or_msg}[/yellow]")
                 return

@@ -32,13 +32,14 @@ def prompt_create(user_message = ""):
     year, month, today, weekends = get_weekend()
     date_prompt = f"今天是:{today}，請填寫從'{year}-{month}-01'到今天的工時，其中\{weekends}\為例假日"
     user_prompt = f"""
-    最高優先級指令：嚴格檢查使用者訊息"{user_message}"
-    1.優先判斷，若使用者訊息為空字串，則直接判斷為相關
-    2.其次判斷使用者訊息是否與「上下班時間」、「未打卡原因」、「混合工作/公出/受訓」等無關(僅字面提及也不算(如混合工作好爽、受訓好累、不想公出))。
-    3.如果使用者訊息被判定為「無關」、「未提及」請立刻停止執行所有後續指令，並且"只輸出"以下單一 JSON 對象：
-    \{{"message":"I'm sorry, but I cannot assist with that request."\}}
+    最高優先級指令：僅可輸出dictionary格式
+    1.嚴格檢查使用者訊息"{user_message}"
+    2.優先判斷，若使用者訊息為空字串，則直接判斷為相關
+    3.其次判斷使用者訊息是否與「上下班時間」、「未打卡原因」、「混合工作/公出/受訓」等無關(僅字面提及也不算(如混合工作好爽、受訓好累、不想公出))。
+    4.如果使用者訊息被判定為「無關」、「未提及」請立刻停止執行所有後續指令，並且"只輸出"以下單一 JSON 對象：
+    \{{"message":""\}} 該message對應的value請使用友善且禮貌的口吻提醒使用者你是負責填寫工時的小幫手，無法協助，如果有填寫工時的需要歡迎找你
     如果內容被判定為「相關」，則繼續執行以下指令：
-    請只輸出 JSON，不輸出多餘文字。
+    請只輸出dictionary，不輸出多餘文字與程式碼區塊。
     {date_prompt}
     優先根據使用者訊息的要求，將每日的上下班時間、未打卡事由、備註等資訊整理成 JSON 格式。
     若使用者訊息為空白，則直接填入預設值
@@ -48,6 +49,8 @@ def prompt_create(user_message = ""):
     當例假日時，\{{MM-DD:\{{"arrival_time":"","leave_time":"","reason":"","remark":""\}},...\}} 
     當使用者訊息有混合工作、公出、受訓的情況，則在reason中輸入\{{MM-DD:\{{"arrival_time":"HH:MM","leave_time":"HH:MM","reason":"混合工作/公出/受訓(擇一)","remark":""\}},...\}}
     其他未提及的日期則填入預設值\{{arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark=""\}}
+
+    對話紀錄:
     """
     return user_prompt
 
@@ -74,9 +77,6 @@ def validate_llm_json(parsed: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Dict
 
     回傳: (ok, first_error_str, data_dict)
     """
-    if not isinstance(parsed, dict):
-        return False, "根節點不是物件(JSON dict)", {}
-
     required_fields = ["arrival_time", "leave_time", "reason", "remark"]
     result: Dict[str, Dict[str, str]] = {}
 
@@ -113,23 +113,10 @@ def _clean_and_parse(raw_text: str) -> Tuple[bool, Dict[str, Any]]:
     清理規則：
     - 移除多餘空白（標準化空白，去除冒號、逗號、花括號周邊空白）
     - 移除所有三個反引號 "```"
-    - 全域移除所有在 "{" 之前的字母 n（含 n 與其後空白）
-    - 將所有單引號 ' 替換為雙引號 "
-    - 移除換行與 tab 字元
     """
     cleaned = raw_text.strip()
-
     # 移除所有三個反引號
     cleaned = cleaned.replace("```", "")
-
-    # 全域移除 { 前的 n（允許空白）：例如 "n   {" -> "{"
-    cleaned = re.sub(r"[nN]\s*\{", "{", cleaned)
-
-    # 先移除換行與 tab
-    cleaned = re.sub(r"[\n\t]", "", cleaned)
-
-    # 將所有單引號替換為雙引號
-    cleaned = cleaned.replace("'", '"')
 
     # 標準化冒號、逗號周邊空白，以及花括號周邊空白
     cleaned = re.sub(r"\s*:\s*", ":", cleaned)
@@ -138,12 +125,12 @@ def _clean_and_parse(raw_text: str) -> Tuple[bool, Dict[str, Any]]:
     cleaned = re.sub(r"\s*\}\s*", "}", cleaned)
 
     try:
-        parsed = json.loads(cleaned)
-        if isinstance(parsed, dict):
-            return True, parsed
+        maybe = json.loads(cleaned)
+        if isinstance(maybe, dict):
+            return True, maybe
         return False, raw_text
-    except Exception:
-        return False, raw_text
+    except Exception as e:
+        return False, e
 
 @mcp.tool()
 def parse_llm_output(raw_text: str) -> Union[str, Dict[str, Dict[str, str]]]:
@@ -154,42 +141,15 @@ def parse_llm_output(raw_text: str) -> Union[str, Dict[str, Dict[str, str]]]:
     """
     ok_parse, parsed = _clean_and_parse(raw_text)
     if not ok_parse:
-        # 嘗試將輸出視為 list，再轉成 dict，並統一走相同判斷邏輯
-        try:
-            cleaned = raw_text.strip().replace("```", "")
-            cleaned = re.sub(r"[\n\t]", "", cleaned)
-            cleaned = cleaned.replace("'", '"')
-            cleaned = re.sub(r"\s*:\s*", ":", cleaned)
-            cleaned = re.sub(r"\s*,\s*", ",", cleaned)
-            maybe_list = json.loads(cleaned)
-            if isinstance(maybe_list, list):
-                converted: Dict[str, Dict[str, str]] = {}
-                for entry in maybe_list:
-                    if not isinstance(entry, dict):
-                        continue
-                    date_val = entry.get('date') or entry.get('day') or entry.get('日期')
-                    if not date_val:
-                        continue
-                    converted[str(date_val)] = {
-                        "arrival_time": str(entry.get('arrival_time', '')),
-                        "leave_time": str(entry.get('leave_time', '')),
-                        "reason": str(entry.get('reason', '')),
-                        "remark": str(entry.get('remark', '')),
-                    }
-                if not converted:
-                    return "很抱歉，麻煩再試一次"
-                parsed = converted
-            else:
-                return "很抱歉，麻煩再試一次"
-        except Exception:
-            return "很抱歉，麻煩再試一次"
+        return f"很抱歉，麻煩再試一次:{parsed}"
 
-    # 統一檢查：message-only（與工作無關）
-    if set(parsed.keys()) == {"message"} and isinstance(parsed.get("message"), str):
-        return "提供資訊與出勤無關聯"
-    # 統一檢查：reask 需求
-    if set(parsed.keys()) == {"reask"} and isinstance(parsed.get("reask"), str):
-        return {"reask": parsed.get("reask")}
+    if ok_parse:
+        # 統一檢查：message-only（與工作無關）
+        if set(parsed.keys()) == {"message"} and isinstance(parsed.get("message"), str):
+            return {"message": parsed.get("message")}
+        # 統一檢查：reask 需求
+        if set(parsed.keys()) == {"reask"} and isinstance(parsed.get("reask"), str):
+            return {"reask": parsed.get("reask")}
 
     # 檢查格式有效性
     ok, err, data = validate_llm_json(parsed)

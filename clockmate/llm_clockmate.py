@@ -4,6 +4,7 @@ import re
 from typing import Dict, Tuple, List, Any, Union
 
 import akasha
+import traceback
 
 import dotenv
 dotenv.load_dotenv()
@@ -31,27 +32,60 @@ def get_weekend():
 def prompt_create(user_message = ""):
     year, month, today, weekends = get_weekend()
     date_prompt = f"今天是:{today}，請填寫從'{year}-{month}-01'到今天的工時，其中\{weekends}\為例假日"
-    user_prompt = f"""
-    最高優先級指令：僅可輸出dictionary格式
-    1.嚴格檢查使用者訊息"{user_message}"
-    2.優先判斷，若使用者訊息為空字串，則直接判斷為相關
-    3.其次判斷使用者訊息是否與「上下班時間」、「未打卡原因」、「混合工作/公出/受訓」等無關(僅字面提及也不算(如混合工作好爽、受訓好累、不想公出))。
-    4.如果使用者訊息被判定為「無關」、「未提及」請立刻停止執行所有後續指令，並且"只輸出"以下單一 JSON 對象：
-    \{{"message":""\}} 該message對應的value請使用友善且禮貌的口吻提醒使用者你是負責填寫工時的小幫手，無法協助，如果有填寫工時的需要歡迎找你
-    如果內容被判定為「相關」，則繼續執行以下指令：
-    請只輸出dictionary，不輸出多餘文字與程式碼區塊。
-    {date_prompt}
-    優先根據使用者訊息的要求，將每日的上下班時間、未打卡事由、備註等資訊整理成 JSON 格式。
-    若使用者訊息為空白，則直接填入預設值
-    若使用者訊息有簡短字句但過於簡短以致無法確認意圖(如:10點，受訓、忘刷)，
-    請依照\{{"reask":"請問..."\}}格式回覆，根據針對簡短輸入的回問策略，產生一個簡潔、禮貌且具體的回問語句，引導使用者提供缺失的關鍵資訊（日期與時間及原因），提供使用者確認:
+    # user_prompt = f"""
+    # # 任務:
+    # 你是工時填寫小幫手，負責協助使用者整理每日上下班時間、未打卡原因、備註等資訊。
+    # 根據使用者提供的訊息，請判斷其是否與工時填寫相關，並根據需求整理成指定的 JSON 格式。
     
-    當例假日時，\{{MM-DD:\{{"arrival_time":"","leave_time":"","reason":"","remark":""\}},...\}} 
-    當使用者訊息有混合工作、公出、受訓的情況，則在reason中輸入\{{MM-DD:\{{"arrival_time":"HH:MM","leave_time":"HH:MM","reason":"混合工作/公出/受訓(擇一)","remark":""\}},...\}}
-    其他未提及的日期則填入預設值\{{arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark=""\}}
+    # # 規則:
+    # 最高優先級指令：僅可輸出dictionary格式
+    # 1.嚴格檢查使用者訊息"{user_message}"
+    # 2.優先判斷，若使用者訊息為空字串，則直接判斷為相關
+    # 3.其次判斷使用者訊息是否與「上下班時間」、「未打卡原因」、「混合工作/公出/受訓」等無關(僅字面提及也不算(如混合工作好爽、受訓好累、不想公出))。
+    # 4.如果使用者訊息被判定為「無關」、「未提及」請立刻停止執行所有後續指令，並且"只輸出"以下單一 JSON 對象：
+    # \{{"message":""\}} 該message對應的value請使用友善且禮貌的口吻提醒使用者你是負責填寫工時的小幫手，無法協助，如果有填寫工時的需要歡迎找你
+    # 如果內容被判定為「相關」，則繼續執行以下指令：
+    # 請只輸出dictionary，不輸出多餘文字與程式碼區塊。
+    # {date_prompt}
+    # 優先根據使用者訊息的要求，將每日的上下班時間、未打卡事由、備註等資訊整理成 JSON 格式。
+    # 若使用者訊息為空白，則直接填入預設值
+    # 若使用者訊息有簡短字句但過於簡短以致無法確認意圖(如:10點，受訓、忘刷)，
+    # 請依照\{{"reask":"請問..."\}}格式回覆，根據針對簡短輸入的回問策略，產生一個簡潔、禮貌且具體的回問語句，引導使用者提供缺失的關鍵資訊（日期與時間及原因），提供使用者確認:
+    
+    # 當例假日時，\{{MM-DD:\{{"arrival_time":"","leave_time":"","reason":"","remark":""\}},...\}} 
+    # 當使用者訊息有混合工作、公出、受訓的情況，則在reason中輸入\{{MM-DD:\{{"arrival_time":"HH:MM","leave_time":"HH:MM","reason":"混合工作/公出/受訓(擇一)","remark":""\}},...\}}
+    # 其他未提及的日期則填入預設值\{{arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark=""\}}
 
-    對話紀錄:
-    """
+    # # 對話紀錄:
+    # """
+    
+    user_prompt = f"""
+# 任務:
+你是工時填寫小幫手，負責協助使用者整理每日上下班時間、未打卡原因、備註等資訊。
+根據使用者提供的訊息，請判斷其是否與工時填寫相關，並根據需求整理成指定的 JSON 格式。
+
+# 今日日期資訊
+{date_prompt}
+""" + """
+# 規則:
+如果使用者的需求不是與填寫工作時間(工時)，可以做出簡短適當的回應，並且詢問可以幫忙使用者作什麼有關工時填寫的事。
+如果使用者的需求是與填寫工作時間(工時)相關，請輸出以下格式的JSON字串:
+{"yyyyMMDD":{"arrival_time":"HH:MM","leave_time":"HH:MM","reason":"原因","remark":"備註"},...}
+請只輸出dictionary，不輸出多餘文字與程式碼區塊，不然後面會無法處理。
+若是使用者未詳細說明工作時間資訊細節，則使用預設值，生成從月初到今天的每日工時資訊，預設值為:
+arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark="" 來產生每日工時資訊。
+範例:
+{"20251201":{"arrival_time":"09:00","leave_time":"18:00","reason":"忘刷","remark":""},
+ "20251202":{"arrival_time":"10:00","leave_time":"17:30","reason":"忘刷","remark":""}...
+ <一直填到今天日期為止>}
+如果使用者有指定那些日期需要填寫工時，例如: 12月3日與4日上班時間10點和9點，則生成該日期的工時資訊為:
+{"20251203":{"arrival_time":"10:00","leave_time":"18:00","reason":"忘刷","remark":""},
+ "20251204":{"arrival_time":"09:00","leave_time":"18:00","reason":"忘刷","remark":""}}
+就好。
+""" + f"""
+# 使用者訊息:
+{user_message}
+"""
     return user_prompt
 
 def get_per_day_work_times_by_llm(
@@ -140,22 +174,29 @@ def parse_llm_output(raw_text: str) -> Union[str, Dict[str, Dict[str, str]]]:
     - 否則執行格式驗證，通過則回傳日期→工時的 dict，失敗則拋出 ValueError。
     """
     ok_parse, parsed = _clean_and_parse(raw_text)
-    if not ok_parse:
-        return f"很抱歉，麻煩再試一次:{parsed}"
+    
+    try:
+        if not ok_parse:
+            return f"很抱歉，麻煩再試一次:{parsed}"
 
-    if ok_parse:
-        # 統一檢查：message-only（與工作無關）
-        if set(parsed.keys()) == {"message"} and isinstance(parsed.get("message"), str):
-            return {"message": parsed.get("message")}
-        # 統一檢查：reask 需求
-        if set(parsed.keys()) == {"reask"} and isinstance(parsed.get("reask"), str):
-            return {"reask": parsed.get("reask")}
+        if ok_parse:
+            # 統一檢查：message-only（與工作無關）
+            if set(parsed.keys()) == {"message"} and isinstance(parsed.get("message"), str):
+                return {"message": parsed.get("message")}
+            # 統一檢查：reask 需求
+            if set(parsed.keys()) == {"reask"} and isinstance(parsed.get("reask"), str):
+                return {"reask": parsed.get("reask")}
 
-    # 檢查格式有效性
-    ok, err, data = validate_llm_json(parsed)
-    if not ok:
-        return err or "格式驗證失敗"
-    return data
+        # 檢查格式有效性
+        ok, err, data = validate_llm_json(parsed)
+        if not ok:
+            return err or "格式驗證失敗"
+        return data
+    
+    except Exception as e:
+        print(traceback.format_exc())
+        # 發生例外，回傳原始文字以供調試
+        return {'message': raw_text}
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")

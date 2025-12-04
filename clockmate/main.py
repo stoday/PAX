@@ -16,6 +16,7 @@ import sys
 import logging
 import contextlib
 import akasha
+import json_repair
 
 # 載入環境變數
 dotenv.load_dotenv()
@@ -389,11 +390,19 @@ def run_llm_cli(mode="llm", output_stream=None):
 
         # 迴圈：若 LLM 回覆 reask，提示並請使用者重新輸入
         accumulated_message = ""
-        # 首次或累積後的訊息提示
-        user_message = prompt_with_default(">")
-        # 顯示使用者剛輸入的內容，避免某些 SSH/IME 不回顯中文
-        console.print(f"[dim]您輸入：{user_message}[/dim]")
+        # # 首次或累積後的訊息提示
+        # user_message = prompt_with_default(">")
+        
+        # # 顯示使用者剛輸入的內容，避免某些 SSH/IME 不回顯中文
+        # console.print(f"[dim]您輸入：{user_message}[/dim]")
+        
         while True:
+            # 首次或累積後的訊息提示
+            user_message = prompt_with_default(">")
+            
+            # 顯示使用者剛輸入的內容，避免某些 SSH/IME 不回顯中文
+            console.print(f"[dim]您輸入：{user_message}[/dim]")
+            
             # 將使用者輸入累積成單一訊息（保留上下文）
             if accumulated_message:
                 accumulated_message = f"{user_message}\n{accumulated_message}".strip()
@@ -403,133 +412,83 @@ def run_llm_cli(mode="llm", output_stream=None):
             console.print("[bold]思考中...[/bold]")
             user_prompt = prompt_create(user_message=accumulated_message)
 
-            # 定義 MCP 伺服器連接資訊（以模組方式啟動，支援安裝版與原始碼）
-            connection_info = {
-                "parse_llm_output": {
-                    "command": "python",
-                    "args": ["-m", "clockmate.llm_clockmate"],
-                    "transport": "stdio",
-                },
-            }
+            # # 定義 MCP 伺服器連接資訊（以模組方式啟動，支援安裝版與原始碼）
+            # connection_info = {
+            #     "parse_llm_output": {
+            #         "command": "python",
+            #         "args": ["-m", "clockmate.llm_clockmate"],
+            #         "transport": "stdio",
+            #     },
+            # }
 
             # 將第三方套件內部 print 轉向到伺服器端 log 檔，不顯示於 SSH 客戶端
-            with redirect_lib_output_to_logger(get_agent_logger()):
-                agent = akasha.agents(
-                    model=MODEL,
-                    temperature=0.01,
-                    verbose=False,
-                    max_output_tokens=10000
-                )
-                response = agent.mcp_agent(connection_info, user_prompt)
+            # with redirect_lib_output_to_logger(get_agent_logger()):
+                # agent = akasha.agents(
+                #     model=MODEL,
+                #     temperature=0.01,
+                #     verbose=False,
+                #     max_output_tokens=10000
+                # )
+                # response = agent.mcp_agent(connection_info, user_prompt)
+            asker = akasha.ask(
+                model=MODEL,
+                max_input_tokens=8000,
+                max_output_tokens=20000,
+                temperature=1.0,
+            )
 
-            try:
-                import json
-                parsed_or_msg = json.loads(response)
-            except Exception:
-                parsed_or_msg = response
-            # parsed_or_msg = parse_llm_output(response)
+            response = asker(prompt=user_prompt,
+                             temperature=0.8)
 
-            # 需要重新提問：要求使用者再次輸入非空補充，並合併到累積訊息
-            if isinstance(parsed_or_msg, dict) and 'reask' in parsed_or_msg:
-                console.print(f"[yellow]{parsed_or_msg['reask']}[/yellow]")
-                # 強制再次輸入不得為空
-                while True:
-                    supplement = prompt_with_default("> (請補充說明，不可空白)")
-                    console.print(f"[dim]您輸入：{supplement}[/dim]")
-                    if supplement.strip():
-                        accumulated_message = f"{accumulated_message}\nAI:{parsed_or_msg['reask']}\nuser:{supplement.strip()}".strip()
-                        break
-                    else:
-                        console.print("[yellow]輸入不可為空，請再試一次。[/yellow]")
-                # 回到迴圈，用累積訊息再呼叫 LLM
-                continue
+            if isinstance(json_repair.loads(response), dict):
+                job_working_time = response
+                response = asker(prompt="你的任務事回應使用者之前的需求，你已經做完了。活潑的說明已經幫使用者填完工作時間")
+                console.print(f"[dim]LLM 回覆：{response}[/dim]")
+                final_work_time = job_working_time
 
-            # 非 reask：若為文字（錯誤/無關），結束此次執行
-            if isinstance(parsed_or_msg, dict) and 'message' in parsed_or_msg:
-                if set(parsed_or_msg.keys()) == {"message"} and isinstance(parsed_or_msg.get("message"), str):
-                    msg = parsed_or_msg.get("message")
-                    console.print(f"[yellow]{msg}[/yellow]")
+                form_data, session = get_fresh_form_llm_data(target_year_month, final_work_time, mode=mode)
+                if not form_data:
+                    console.print("[bold red]無法生成表單資料，請稍後再試。[/bold red]")
                     return
-            if isinstance(parsed_or_msg, str):
-                console.print(f"[yellow]{parsed_or_msg}[/yellow]")
-                return
 
-            console.print("[yellow]工時正確生成.[/yellow]")
-            final_work_time = parsed_or_msg
-            break
-    elif mode == "manual":
-        # console.print("[bold]目前模式: 手動[/bold]")
-        console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值。[/bold]")
-        target_year_month = prompt_with_default("填寫年月 (YYYY/MM)", target_year_month)
-        arrival_time = prompt_with_default("預設上班時間 (HH:MM)", "09:00")
-        leave_time = prompt_with_default("預設下班時間 (HH:MM)", "18:00")
-        reason = prompt_with_default("預設原因", "忘刷")
-        remark = prompt_with_default("預設備註 (可留空)", "").strip()
+                console.rule("[bold green]表單資料已完成建立[/bold green]")
+                # if fetch_hidden and session:
+                if session:
+                    if prompt_yes_no("需要立即提交表單嗎？", True):
+                        console.rule("[bold magenta]提交表單[/bold magenta]")
+                        console.print("📝 正在提交表單...")
+                        post_headers = get_post_headers(target_year_month)
+                        console.print(f"[dim]📋 使用 headers: {list(post_headers.keys())}[/dim]")
 
-        custom_work_times = {
-            'arrival_time': arrival_time,
-            'leave_time': leave_time,
-            'reason': reason,
-            'remark': remark
-        }
+                        submit_url = build_timesheet_url(target_year_month)
+                        response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
 
-        summary_table = Table(show_header=False, box=box.SIMPLE_HEAVY)
-        summary_table.add_row("✨ 年月", target_year_month)
-        summary_table.add_row("⏰ 上班/下班", f"{arrival_time} - {leave_time}")
-        summary_table.add_row("📝 原因", reason)
-        summary_table.add_row("💬 備註", remark or "（無）")
+                        console.print(f"[bold green]✅ 提交完成！狀態碼: {response.status_code}[/bold green]")
 
-        console.rule("[bold cyan]設定摘要[/bold cyan]")
-        console.print(summary_table)
+                        if response.status_code == 302:
+                            location = response.headers.get('Location', '未知')
+                            console.print(f"[cyan]🔄 重定向到: {location}[/cyan]")
 
-        final_work_time = custom_work_times
+                            if 'Default.aspx' not in location:
+                                console.print("[bold green]🎉 表單提交可能成功！[/bold green]")
+                            else:
+                                console.print("[bold red]❌ 被重定向到登入頁面，可能需要重新認證[/bold red]")
+                        elif response.status_code == 200:
+                            console.print("[cyan]📄 收到回應內容:[/cyan]")
+                            console.print(response.text[:300] + "..." if len(response.text) > 300 else response.text)
+                        else:
+                            console.print(f"[yellow]❓ 未預期的狀態碼: {response.status_code}[/yellow]")
+                            console.print(f"[yellow]回應內容: {response.text[:200]}[/yellow]")
 
-    print(final_work_time)
-    if not prompt_yes_no("是否繼續並生成表單資料？", True):
-        console.print("[yellow]已取消操作。[/yellow]")
-        return
-    
-    # tokens 已在首次顯示 banner 時取得，避免重複
-
-    form_data, session = get_fresh_form_llm_data(target_year_month, final_work_time, mode=mode)
-    if not form_data:
-        console.print("[bold red]無法生成表單資料，請稍後再試。[/bold red]")
-        return
-
-    console.rule("[bold green]表單資料已完成建立[/bold green]")
-    # if fetch_hidden and session:
-    if session:
-        if prompt_yes_no("需要立即提交表單嗎？", True):
-            console.rule("[bold magenta]提交表單[/bold magenta]")
-            console.print("📝 正在提交表單...")
-            post_headers = get_post_headers(target_year_month)
-            console.print(f"[dim]📋 使用 headers: {list(post_headers.keys())}[/dim]")
-
-            submit_url = build_timesheet_url(target_year_month)
-            response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
-
-            console.print(f"[bold green]✅ 提交完成！狀態碼: {response.status_code}[/bold green]")
-
-            if response.status_code == 302:
-                location = response.headers.get('Location', '未知')
-                console.print(f"[cyan]🔄 重定向到: {location}[/cyan]")
-
-                if 'Default.aspx' not in location:
-                    console.print("[bold green]🎉 表單提交可能成功！[/bold green]")
+                        console.print(f"[dim]\n📊 回應標頭: {dict(response.headers)}[/dim]")
+                    else:
+                        console.print("[green]👌 表單資料已準備好，您可以稍後手動提交。[/green]")
+                
                 else:
-                    console.print("[bold red]❌ 被重定向到登入頁面，可能需要重新認證[/bold red]")
-            elif response.status_code == 200:
-                console.print("[cyan]📄 收到回應內容:[/cyan]")
-                console.print(response.text[:300] + "..." if len(response.text) > 300 else response.text)
+                    console.print("[blue]📦 表單資料已生成，請記得自行補上隱藏欄位後再提交。[/blue]")
+                    
             else:
-                console.print(f"[yellow]❓ 未預期的狀態碼: {response.status_code}[/yellow]")
-                console.print(f"[yellow]回應內容: {response.text[:200]}[/yellow]")
-
-            console.print(f"[dim]\n📊 回應標頭: {dict(response.headers)}[/dim]")
-        else:
-            console.print("[green]👌 表單資料已準備好，您可以稍後手動提交。[/green]")
-    else:
-        console.print("[blue]📦 表單資料已生成，請記得自行補上隱藏欄位後再提交。[/blue]")
+                console.print('*** ' + response)
         
 def get_fresh_form_llm_data(year_month=None, work_times=None,mode="local"):
     """自動從網頁抓取最新的隱藏欄位和 headers，並生成表單資料"""
@@ -698,17 +657,20 @@ def generate_form_llm_data(year_month=None,
         
         if mode =="llm":
             # 支援多種日期鍵格式：YYYYMMDD / YYYY-MM-DD / YYYY/MM/DD / MM-DD
-            d_keys = [
-                f"{year}{month:02d}{day:02d}",
-                f"{year}-{month:02d}-{day:02d}",
-                f"{year}/{month:02d}/{day:02d}",
-                f"{month:02d}-{day:02d}",
-            ]
-            day_cfg = None
-            for k in d_keys:
-                if k in default_work_times:
-                    day_cfg = default_work_times[k]
-                    break
+            # d_keys = [
+            #     f"{year}{month:02d}{day:02d}",
+            #     f"{year}-{month:02d}-{day:02d}",
+            #     f"{year}/{month:02d}/{day:02d}",
+            #     f"{month:02d}-{day:02d}",
+            # ]
+            # day_cfg = None
+            # for k in d_keys:
+            #     if k in default_work_times:
+            #         try:
+            #             day_cfg = default_work_times[k]
+            #         except Exception:
+            #             breakpoint()
+            #         break
 
             if isinstance(day_cfg, dict):
                 arr = day_cfg.get('arrival_time', '')

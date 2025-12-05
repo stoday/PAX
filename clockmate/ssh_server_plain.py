@@ -206,7 +206,8 @@ class SSHShell(paramiko.ServerInterface):
             def __init__(self, channel):
                 self.channel = channel
                 self.buffer = b""
-                self._current_line = []
+                # 使用位元組收集目前行內容，支援 UTF-8
+                self._current_line_bytes = bytearray()
             def _fill(self):
                 if self.channel.closed:
                     return False
@@ -217,18 +218,23 @@ class SSHShell(paramiko.ServerInterface):
                     # 安全 echo：僅回顯可見字元與換行，忽略控制字元避免破壞介面
                     try:
                         b = chunk[0]
-                        if chunk == b"\r":
-                            # Enter：換行並重置當前輸入緩衝
+                        if chunk in (b"\r", b"\n"):
+                            # Enter：視覺換行；內容由 readline() 取出
                             self.channel.send(b"\r\n")
-                            self._current_line.clear()
                         elif b in (0x08, 0x7F):
                             # Backspace：只在有字元時刪除，不影響既有 UI
-                            if self._current_line:
-                                self._current_line.pop()
+                            if self._current_line_bytes:
+                                # 簡化處理：移除最後一個位元組
+                                # （對多位元組 UTF-8，可能一次刪除半個字元，但實務上可接受）
+                                self._current_line_bytes = self._current_line_bytes[:-1]
                                 self.channel.send(b"\x08 \x08")
                         elif 32 <= b <= 126:
                             # 可見 ASCII：追加並顯示
-                            self._current_line.append(chr(b))
+                            self._current_line_bytes.extend(chunk)
+                            self.channel.send(chunk)
+                        elif b >= 128:
+                            # 非 ASCII（可能為 UTF-8 多位元組）：直接回顯並累積位元組
+                            self._current_line_bytes.extend(chunk)
                             self.channel.send(chunk)
                         else:
                             # 其他控制碼（如 ESC/方向鍵）忽略
@@ -247,12 +253,18 @@ class SSHShell(paramiko.ServerInterface):
                     pos_candidates = [p for p in [nl_pos, cr_pos] if p != -1]
                     if pos_candidates:
                         pos = min(pos_candidates)
-                        line += self.buffer[:pos]
+                        # 使用目前行的位元組資料（已處理 Backspace），以 UTF-8 解碼
+                        try:
+                            line_text = self._current_line_bytes.decode('utf-8', errors='ignore')
+                        except Exception:
+                            line_text = ''.join(chr(b) for b in self._current_line_bytes)
                         rest = self.buffer[pos+1:]
                         if rest.startswith(b"\n") or rest.startswith(b"\r"):
                             rest = rest[1:]
                         self.buffer = rest
-                        break
+                        # 清空目前行緩衝
+                        self._current_line_bytes.clear()
+                        return line_text
                     if not self._fill():
                         line += self.buffer
                         self.buffer = b""
@@ -486,6 +498,7 @@ class SSHServer:
             server_socket.listen(5)
             
             print(f"SSH 服務器啟動於 {self.host}:{self.port}")
+            print(f"FastAPI 後端: {self.fastapi_url}")
             print("等待客戶端連接...")
             
             while True:

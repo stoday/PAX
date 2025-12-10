@@ -5,7 +5,6 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "akasha-terminal==0.9.13",
     "annotated-doc==0.0.4",
     "bcrypt==5.0.0",
     "beautifulsoup4>=4.9.0",
@@ -21,6 +20,7 @@ dependencies = [
     "invoke==2.2.1",
     "markdown-it-py==4.0.0",
     "mdurl==0.1.2",
+    "mcp>=1.6.0",
     "paramiko==4.0.0",
     "pycparser==2.23",
     "pyfiglet>=0.8.0",

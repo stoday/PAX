@@ -69,6 +69,7 @@ def _start_ssh_server(host: str, port: int, fastapi_url: str):
         history_session = ''
         while True:
             prompt = termlit.input("你: ")
+            termlit.write("")
             if prompt.lower() in ['exit', 'quit']:
                 termlit.write("再見！")
                 break
@@ -95,8 +96,8 @@ def _start_ssh_server(host: str, port: int, fastapi_url: str):
                 user_prompt=prompt))  # "幫我填11月5日的工時，然後上班時間要接近9點，因為我那天有點晚到。"
 
             # spinner 結束後換行，再輸出回應，避免兩者同一行
-            termlit.write("")
             termlit.write('AI: ' + response)
+            termlit.write("")
             
             history_session += f"User: {prompt}\nAI: {response}\n"
     

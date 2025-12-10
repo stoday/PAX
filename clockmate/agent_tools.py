@@ -27,7 +27,7 @@ form_util_today_tool = akasha.create_tool(
 # 創建工具
 for_target_dates_tool = akasha.create_tool(
     tool_description="""
-    這是一個可以自動填寫工作時間(工時)的工具，可以根據使用者**指定的日期與需求**來生成對應的表單資料，然後送到指定的系統。這個工具需要的兩個參數，分別是`year_month`與`target_dates`，參數內容說明如下：
+    這是一個可以自動填寫工作時間(工時)的工具，可以根據使用者**指定的日期與需求**，或是**上下班時間非預設想自由調整**來生成對應的表單資料，然後送到指定的系統。這個工具需要的兩個參數，分別是`year_month`與`target_dates`，參數內容說明如下：
         year_month (str): 年月，格式如 "2025/11"，如果未提供則使用當前月份
         target_dates (dict): 自訂的指定日期及其上下班時間和原因等資訊，格式如：
             {
@@ -51,6 +51,7 @@ agent = akasha.agents(
     model="gemini:gemini-2.5-flash",
     temperature=1.0,
     verbose=False,
+    # verbose=True, # for debug
     keep_logs=True,
 )
 
@@ -68,9 +69,15 @@ def main():
     # 使用者需求                   
     {user_prompt}
     """.format(today_date_info=prompt_for_today_date, 
-               user_prompt="幫我填11月5日的工時，然後上班時間要接近9點，因為我那天有點晚到。"))
+               user_prompt="可以幫我改12/02的下班時間是空的嗎? 因為現在還沒到下班時間我就填了，不太正確")) 
     print(response)
     
     
 if __name__ == "__main__":
     main()
+
+
+## 測試案例
+# "幫我填11月5日的工時，然後上班時間要接近9點，因為我那天有點晚到。"
+# "填寫12月工時，上下班時間幫我取個接近早上九點與下午六點的亂數時間，原因就填忘刷，備註就不需要了。"
+# "可以幫我改12/02的下班時間是空的嗎? 因為現在還沒到下班時間我就填了，不太正確"

@@ -10,7 +10,8 @@ node_modules/
 dist/
 build/
 *.pem
-akasha_mcp_test/
+logs
+akasha-package/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -150,6 +151,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env_cookie
 .envrc
 .venv
 env/

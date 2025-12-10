@@ -27,7 +27,8 @@ dotenv.load_dotenv()
 
 BASE_TIMESHEET_URL = "https://hrwt.iii.org.tw/TSM/MyWorkTime.aspx"
 TIMESHEET_ORIGIN = "https://hrwt.iii.org.tw"
-LOG_DIR = Path(__file__).resolve().parent / "logs"
+# 將 log 檔案統一輸出到專案根目錄的 logs 資料夾，避免與套件內部路徑混淆
+LOG_DIR = Path(__file__).resolve().parents[1] / "logs"
 LOG_FILE = LOG_DIR / f"access_hr_web_tool_{datetime.datetime.now().strftime('%Y%m%d')}.log"
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -77,7 +78,9 @@ def generate_form_data_for_target_dates(year_month=None,
             full_form_data[f"ctl00$ContentPlaceHolder1$txtLev_{date_str}"] = times.get('leave_time', '')
             full_form_data[f"ctl00$ContentPlaceHolder1$Dp_{date_str}"] = times.get('reason', '')
             full_form_data[f"ctl00$ContentPlaceHolder1$txtR_{date_str}"] = times.get('remark', '')
-            
+        
+        # 紀錄 full_form_data 資訊
+        logging.info("已更新目標日期的表單資料: %s", str(full_form_data))
         return full_form_data
     
     else:
@@ -523,7 +526,8 @@ def get_fresh_form_for_util_today(year_month=None, work_times=None):
     """
     viewstate, viewstate_generator, event_validation, session = process_headers_cookies(year_month)
     if not all([viewstate, viewstate_generator, event_validation, session]):
-        return None, None
+        raise Exception("無法取得必要的隱藏欄位或 session，請檢查登入狀態。")
+        # return None, None
 
     # 動態生成表單資料，自動填到今天為止
     fresh_form_data = generate_form_util_today(year_month,
@@ -570,11 +574,11 @@ def get_fresh_form_for_target_dates(year_month=None, target_dates=None):
         return None, None
 
     # 動態生成表單資料，針對指定日期
-    target_dates = {
-        '20251103': {'arrival_time': '09:03', 'leave_time': '18:03', 'reason': '忘刷', 'remark': ''},
-        '20251105': {'arrival_time': '09:05', 'leave_time': '18:05', 'reason': '忘刷', 'remark': ''},
-    }
-    fresh_form_data = generate_form_data_for_target_dates(year_month='2025/11', 
+    # target_dates = {
+    #     '20251103': {'arrival_time': '09:03', 'leave_time': '18:03', 'reason': '忘刷', 'remark': ''},
+    #     '20251105': {'arrival_time': '09:05', 'leave_time': '18:05', 'reason': '忘刷', 'remark': ''},
+    # }
+    fresh_form_data = generate_form_data_for_target_dates(year_month=year_month, 
                                                           target_dates=target_dates)
 
     # 使用從網頁取得的最新隱藏欄位更新表單資料

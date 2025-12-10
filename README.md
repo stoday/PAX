@@ -24,26 +24,30 @@ pip install -e .
 ```
 2) 取得並寫入環境變數 `.env`
 ```bash
-python get_token.py
+python -m clockmate.get_token   # 或執行 console script: clockmate-token
 ```
    - 會自動開啟瀏覽器，依指示登入 hrwt；完成後程式會將 `ASP_NET_SESSION_ID`、`CLIENT_TICKET`、`CLIENT_USERNAME` 寫入專案根目錄的 `.env`。
    - 若需要呼叫 LLM 服務，可在 `.env` 內自行加入 `API KEY`。例如: 想要使用 `Gemini` 模型，加入變數 `GEMINI_API_KEY=xxxxx`
 3) （選用）若要固定 log 路徑，可將 `CLOCKMATE_LOG_PATH` 指到想要的檔案；預設寫在 `clockmate/logs/access_hr_web_tool_YYYYMMDD.log`。
 
 ## 操作範例
-- 啟動後端服務（含 SSH shell 與 FastAPI）
+- 先取得 cookie 並寫入 `.env`
 ```bash
-python start_services.py
+python -m clockmate.get_token     # 或使用 console script: clockmate-token
+```
+- 啟動 SSH shell 服務（已安裝套件時可直接用 console script）
+```bash
+# pip 安裝後
+clockmate
+# 若是從原始碼直接執行（請先依上方「clone 安裝」步驟取得原始碼）
+python clockmate/cli.py
 ```
 - 以預設帳密連線 SSH（可在設定中調整）
 ```bash
 ssh admin@127.0.0.1 -p 2222
 # 密碼：password123
 ```
-- 進入 shell 後執行 ClockMate
-```bash
-clockmate              # 預設 LLM 模式
-```
+- 連線後會自動啟動 ClockMate（LLM 模式），直接用自然語言對話即可；若想結束輸入 `exit`/`quit`。
 - 取得 token（會開啟瀏覽器並寫入 .env）
 ```bash
 clockmate-token
@@ -60,3 +64,8 @@ AI: 12 月的工時已成功填寫至今天 (2025 年 12 月 05 日)。
 - 若 SSH 連線埠或帳密有自訂，請同步修改連線指令。
 - 程式會自動嘗試填入工作日，假日欄位保持空白；提交前請再次確認生成內容是否符合需求。
 - 若瀏覽器或網路連線有額外限制，請確保環境允許對 hrwt.iii.org.tw 發送請求。
+
+## 即將開發
+- 工具呼叫模式由 call tool 改為 MCP。
+- SSH 登入時自動提示是否有未填妥的工時。
+- 新增查詢目前工時紀錄的指令。

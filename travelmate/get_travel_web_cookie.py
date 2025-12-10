@@ -6,6 +6,7 @@ travel application site and store them in .env_cookie.
 from __future__ import annotations
 
 from pathlib import Path
+import os
 from typing import Dict, Tuple
 
 from dotenv import load_dotenv, set_key
@@ -37,6 +38,61 @@ def wait_for_manual_login(driver: webdriver.Chrome) -> None:
     print(f"已開啟登入頁面：{LOGIN_URL}")
     print("請在瀏覽器中手動輸入帳號密碼完成登入後，回到終端機按 Enter 繼續。")
     input("登入完成後按 Enter 繼續跳轉到出差申請頁面...")
+
+
+def auto_login(driver: webdriver.Chrome, username: str, password: str) -> None:
+    """Auto-fill username/password and submit the login form.
+
+    This targets the login inputs with id `EmpAccount` and `Password`, and
+    clicks the button with id `ADSubmit_m`.
+    """
+    # Navigate to login page first
+    driver.get(LOGIN_URL)
+    print(f"自動填入帳密並嘗試登入：{LOGIN_URL}")
+
+    # Wait for input elements to be visible and interactable
+    wait = WebDriverWait(driver, 20)
+    account_el = wait.until(EC.visibility_of_element_located((By.ID, "EmpAccount")))
+    password_el = wait.until(EC.visibility_of_element_located((By.ID, "Password")))
+
+    # Try to send keys; if element not interactable (hidden/overlaid), fallback to JS assignment
+    try:
+        account_el.clear()
+        account_el.send_keys(username)
+    except Exception:
+        # fallback: directly set value via JS and fire input events
+        driver.execute_script(
+            "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input'));",
+            account_el,
+            username,
+        )
+
+    try:
+        password_el.clear()
+        password_el.send_keys(password)
+    except Exception:
+        driver.execute_script(
+            "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input'));",
+            password_el,
+            password,
+        )
+
+    # Click submit button; prefer element_to_be_clickable but fallback to JS click
+    try:
+        submit_btn = wait.until(EC.element_to_be_clickable((By.ID, "ADSubmit_m")))
+        submit_btn.click()
+    except Exception:
+        # If click fails (element not interactable / overlay), try JS click
+        try:
+            btn = driver.find_element(By.ID, "ADSubmit_m")
+            driver.execute_script("arguments[0].click();", btn)
+        except Exception as exc:
+            # Re-raise with context for caller to handle
+            raise
+
+    # Wait for navigation / ready state
+    WebDriverWait(driver, 30).until(lambda d: d.execute_script("return document.readyState") == "complete")
+    WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
 
 
 def goto_travel_page(driver: webdriver.Chrome) -> None:
@@ -77,13 +133,34 @@ def persist_cookies(cookie_string: str, cookie_map: Dict[str, str]) -> None:
     print("TRAVEL_COOKIE_STRING 可直接用於後續的 requests，其他欄位則為常用單獨 cookie。")
 
 
-def main() -> None:
-    """Entry point to launch browser and capture cookies."""
+def main(interactive: bool = True, username: str | None = None, password: str | None = None) -> None:
+    """Entry point to launch browser and capture cookies.
+
+    Parameters
+    - interactive: when True (default), open login page and wait for user to press Enter.
+      When False, the function will attempt to read credentials from parameters or
+      environment variables and perform automated login.
+    - username/password: optional overrides for automated login. If not provided
+      and interactive is False, values are looked up from env `TRAVEL_EIP_USER` and
+      `TRAVEL_EIP_PASS`.
+    """
     load_dotenv()
+
+    # Determine credentials for automated flow
+    if not interactive:
+        u = username or os.getenv("TRAVEL_EIP_USER")
+        p = password or os.getenv("TRAVEL_EIP_PASS")
+        if not u or not p:
+            raise RuntimeError("自動登入時需提供 TRAVEL_EIP_USER / TRAVEL_EIP_PASS 或傳入 username/password")
+
     driver = launch_browser()
 
     try:
-        wait_for_manual_login(driver)
+        if interactive:
+            wait_for_manual_login(driver)
+        else:
+            auto_login(driver, u, p)
+
         goto_travel_page(driver)
         cookie_string, cookie_map = collect_cookie_data(driver)
         persist_cookies(cookie_string, cookie_map)

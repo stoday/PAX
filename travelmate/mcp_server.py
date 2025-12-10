@@ -25,27 +25,52 @@ def _write_project_list(projects: list[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-@mcp.tool()
+@mcp.tool(
+    description=(
+        "Fetch Context.ProjectCode entries from the travel apply page and write them to "
+        "project_list.json. Example: call refresh_project_list() with no arguments; it returns "
+        "{\"count\": <int>, \"path\": \".../project_list.json\"}."
+    )
+)
 def refresh_project_list() -> Dict[str, Any]:
     """Fetch Context.ProjectCode entries and persist project_list.json."""
     projects = project_list.fetch_project_list()
     return _write_project_list(projects)
 
 
-@mcp.tool()
+@mcp.tool(
+    description=(
+        "Open a browser, let the user log in, then persist cookies into .env_cookie for reuse. "
+        "Example: call capture_travel_cookies() with no arguments; it returns the .env_cookie path."
+    )
+)
 def capture_travel_cookies() -> str:
     """Launch Selenium login helper and persist cookies to .env_cookie."""
     cookie_script.main()
     return f"Cookies saved to {cookie_script.ENV_PATH}"
 
 
-@mcp.tool()
+@mcp.tool(
+    description=(
+        "Call the GetNewBasic API using existing travel cookies, store the response fields in "
+        ".env_cookie, and return the parsed JSON object. Example: fetch_new_basic_info() -> "
+        "{\"NAME\": \"...\", \"DEPTNAME\": \"...\", ...}."
+    )
+)
 def fetch_new_basic_info() -> Dict[str, Any]:
     """Call GetNewBasic API, store its response, and return the parsed payload."""
     return newbasic_script.fetch_newbasic()
 
 
-@mcp.tool()
+@mcp.tool(
+    description=(
+        "Submit the travel application payload to the DC Save endpoint. "
+        "If payload_json is provided, it must be a JSON object string to override the default "
+        "payload; otherwise the payload is built from local defaults/.env_cookie. "
+        "Example: submit_travel_application() or submit_travel_application(payload_json='{\"AppData\":{\"IS_SUBMIT\":\"N\"}}', timeout=20). "
+        "Returns status_code and response body."
+    )
+)
 def submit_travel_application(payload_json: str | None = None, timeout: int = 15) -> Dict[str, Any]:
     """Submit the current payload to the travel application endpoint."""
     payload_override: Dict[str, Any] | None = None

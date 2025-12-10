@@ -82,7 +82,7 @@ prompt = f"""
         你是一個協助規劃路線的助手，依照以下步驟協助填寫出差單
         1.預設使用大眾交通工具規劃路線(maps_directions){p}
         2.當規畫中有需要搭乘公車的部分，將起始點與終點設為開車進行距離與時間測量，若搭乘公車前後有步行規劃，連同步行行程也納入開車計算
-        3.若有改為開車，則使用計程車價格(taxi-budget)計算費用
+        3.若有改為開車，則使用計程車價格(taxi_fare_estimator)計算費用
         """
 
 """
@@ -104,10 +104,10 @@ connection_info = {
         "url": "http://localhost:3000/mcp",
         "transport": "streamable_http",
     },
-    "taxi-budget": {
+    "fare_estimator": {
         "command": "python",
-        # "args": ["-m", "google_map.taxi_budget"],
-        "args": ["google_map\\taxi_budget.py"],
+        # "args": ["-m", "travel_helper.fare_estimator"],
+        "args": ["travel_helper\\fare_estimator.py"],
         "transport": "stdio",
     },
 }

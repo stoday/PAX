@@ -3,7 +3,7 @@ from mcp.server.fastmcp import FastMCP  # noqa: E402
 mcp = FastMCP("math")
 
 @mcp.tool()
-def txai_budget(distance, city):
+def txai_fare_estimator(distance, city):
     """
     city: 縣市名稱 (string)，用於決定計價規則
     distance: 距離 (float)，單位為公里
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     #     (8.2, "未知市"),  # 使用預設計價
     # ]
     # for distance, city in test_cases:
-    #     fare = txai_budget(distance, city)
+    #     fare = fare_estimator(distance, city)
     #     print(f"距離: {distance} km, 縣市: {city} => 計程車費用: {fare} 元")
 
     mcp.run(transport="stdio")

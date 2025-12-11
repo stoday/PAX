@@ -39,8 +39,8 @@ setup(
     install_requires=read_requirements(),
     entry_points={
         "console_scripts": [
-            "clockmate=clockmate.cli:main",
-            "clockmate-token=clockmate.cli:get_token",
+            # 主命令：直接啟動 SSH 服務（封裝於套件內路徑）
+            "clockmate=clockmate.start_services:start_ssh_server",
         ],
     },
     include_package_data=True,

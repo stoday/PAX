@@ -12,15 +12,31 @@ from rich.table import Table
 from rich import box
 import dotenv
 import os
-
+import sys
+import logging
+import contextlib
+import akasha
+import json_repair
 
 # 載入環境變數
 dotenv.load_dotenv()
 
+MODEL = "gemini:gemini-2.5-flash"
 BASE_TIMESHEET_URL = "https://hrwt.iii.org.tw/TSM/MyWorkTime.aspx"
 TIMESHEET_ORIGIN = "https://hrwt.iii.org.tw"
 console = Console()
 figlet = Figlet(font="slant")
+# 會話初始化旗標：確保特定初始化只在 SSH 連線期間執行一次
+SESSION_INITIALIZED = False
+
+def reset_session_state():
+    """重置會話初始化狀態（供 SSH 連線開始時呼叫）。"""
+    global SESSION_INITIALIZED
+    SESSION_INITIALIZED = False
+
+# 可選的 I/O 掛勾（供 SSH 路徑覆寫互動輸入確認）
+INPUT_FUNC = None  # Callable[[str, object], str]
+CONFIRM_FUNC = None  # Callable[[str, bool], bool]
 
 
 def build_timesheet_url(year_month=None):
@@ -29,7 +45,6 @@ def build_timesheet_url(year_month=None):
         encoded_ym = quote(year_month)
         return f"{BASE_TIMESHEET_URL}?YM={encoded_ym}"
     return BASE_TIMESHEET_URL
-
 
 def generate_form_data(year_month=None, 
                        default_work_times=None,
@@ -173,108 +188,6 @@ def get_dynamic_platform_info():
     else:
         return '"Unknown"'
 
-def get_fresh_form_data(year_month=None, work_times=None):
-    """自動從網頁抓取最新的隱藏欄位和 headers，並生成表單資料"""
-    # 建立 session 維持 cookie
-    session = requests.Session()
-    
-    # 自動設定完整的瀏覽器 headers（根據當前系統環境）
-    user_agent = get_dynamic_user_agent()
-    platform_info = get_dynamic_platform_info()
-    
-    headers = {
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-        "Accept-Encoding": "gzip, deflate, br, zstd",
-        "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
-        "Cache-Control": "max-age=0",
-        # "Authorization": f"Bearer {os.getenv('TEL_BEARER_TOKEN', '')}", # 這個網站不需要 Bearer Token
-        "Connection": "keep-alive",
-        "Host": "hrwt.iii.org.tw",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "same-origin",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1",
-        "User-Agent": user_agent,
-        "sec-ch-ua": '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": platform_info
-    }
-    
-    console.print(f"[bold cyan]🌐 使用動態 User-Agent:[/bold cyan] {user_agent}")
-    console.print(f"[bold cyan]💻 平台資訊:[/bold cyan] {platform_info}")
-    
-    # 設定重要的認證 cookies
-    cookie_values = {
-        'ASP.NET_SessionId': os.getenv("ASP_NET_SESSION_ID", ""),
-        'clientTicket': os.getenv("CLIENT_TICKET", ""),
-        'clientUserName': os.getenv("CLIENT_USERNAME", ""),
-    }
-    missing_cookies = [name for name, value in cookie_values.items() if not value]
-    if missing_cookies:
-        console.print(f"[yellow]⚠️ .env 中缺少 cookie 值: {', '.join(missing_cookies)}，請先執行 get_token.py[/yellow]")
-    else:
-        console.print("[green]✅ 已從 .env 讀取登入 cookie。[/green]")
-
-    for name, value in cookie_values.items():
-        if value:
-            session.cookies.set(name, value, domain='hrwt.iii.org.tw')
-    
-    # # 這個網站不需要認證 Bearer Token 或是 cookie token
-    # cookies = {
-    #     "token": os.getenv("TEL_COOKIE_TOKEN", ""),
-    # }
-    # if not cookies["token"]:
-    #     console.print("[yellow]⚠️ .env 中缺少 token Cookie，請執行 get_token.py 更新。[/yellow]")
-    # session.cookies.update(cookies)
-    
-    target_url = build_timesheet_url(year_month)
-    console.print(f"[cyan]正在獲取最新的頁面資料: {target_url}[/cyan]")
-    
-    # 發送 GET 請求取得頁面
-    response = session.get(target_url, headers=headers)
-    
-    if response.status_code != 200:
-        console.print(f"[bold red]無法訪問頁面，狀態碼: {response.status_code}[/bold red]")
-        return None, None
-    
-    console.print(f"[green]成功取得頁面，長度: {len(response.text)} 字元[/green]")
-    
-    # 顯示從伺服器收到的 cookies
-    if response.cookies:
-        console.print("[yellow]🍪 從伺服器收到的 cookies:[/yellow]")
-        for cookie in session.cookies:
-            console.print(f"  {cookie.name}={cookie.value}")
-    
-    # 解析 HTML 取得隱藏欄位
-    soup = BeautifulSoup(response.text, 'html.parser')
-    
-    viewstate = soup.find('input', {'name': '__VIEWSTATE'})
-    viewstate_generator = soup.find('input', {'name': '__VIEWSTATEGENERATOR'})
-    event_validation = soup.find('input', {'name': '__EVENTVALIDATION'})
-    
-    if not all([viewstate, viewstate_generator, event_validation]):
-        console.print("[bold red]❌ 無法找到必要的隱藏欄位，可能需要重新登入[/bold red]")
-        console.print(f"[red]找到 __VIEWSTATE: {viewstate is not None}[/red]")
-        console.print(f"[red]找到 __VIEWSTATEGENERATOR: {viewstate_generator is not None}[/red]")
-        console.print(f"[red]找到 __EVENTVALIDATION: {event_validation is not None}[/red]")
-        return None, None
-    
-    console.print("[bold green]✅ 成功取得所有隱藏欄位[/bold green]")
-    console.print(f"[green]__VIEWSTATE 長度: {len(viewstate['value'])}[/green]")
-    console.print(f"[green]__VIEWSTATEGENERATOR: {viewstate_generator['value']}[/green]")
-    console.print(f"[green]__EVENTVALIDATION 長度: {len(event_validation['value'])}[/green]")
-    
-    # 動態生成表單資料
-    fresh_form_data = generate_form_data(year_month, work_times)
-    
-    # 使用從網頁取得的最新隱藏欄位更新表單資料
-    fresh_form_data['__VIEWSTATE'] = viewstate['value']
-    fresh_form_data['__VIEWSTATEGENERATOR'] = viewstate_generator['value']
-    fresh_form_data['__EVENTVALIDATION'] = event_validation['value']
-    
-    return fresh_form_data, session
-
 def get_post_headers(year_month=None):
     """取得 POST 提交時的完整 headers（根據當前系統環境）"""
     user_agent = get_dynamic_user_agent()
@@ -302,130 +215,222 @@ def get_post_headers(year_month=None):
         "sec-ch-ua-platform": platform_info
     }
 
-def display_welcome_banner():
+def display_welcome_banner(plain: bool = False):
+    console.print("\r\n")
+
     ascii_banner = figlet.renderText("ClockMate")
     panel = Panel.fit(
         ascii_banner.rstrip(),
         border_style="cyan",
         title="ClockMate 工時小幫手",
-        # subtitle="填報助手",
         style="bold magenta",
     )
     console.print(panel)
-    # console.rule("[bold cyan]開始設定[/bold cyan]")
 
 
 def prompt_with_default(prompt_text, default_value=None):
+    # 若有自訂輸入掛勾，使用簡單文字提示
+    if default_value is not None:
+        prompt_plain = f"{prompt_text} 預設值: [{default_value}]:"
+    else:
+        prompt_plain = f"{prompt_text}:"
+    if INPUT_FUNC:
+        try:
+            val = INPUT_FUNC(prompt_plain, default_value)
+        except Exception as e:
+            # 讓自訂的 ExitRequested 例外傳遞以便 SSH 層捕捉並斷線
+            if e.__class__.__name__ == 'ExitRequested':
+                raise
+            val = ""
+        return (val or default_value) if default_value is not None else (val or "")
+    # 始終使用 Rich 標記以確保渲染樣式
     if default_value:
         prompt = f"[bold white]{prompt_text}[/bold white] [[cyan]{default_value}[/cyan]]: "
     else:
         prompt = f"[bold white]{prompt_text}[/bold white]: "
     user_input = console.input(prompt).strip()
-    return user_input or default_value
+    return user_input or (default_value if default_value is not None else "")
 
 
 def prompt_yes_no(prompt_text, default=True):
+    if CONFIRM_FUNC:
+        try:
+            return CONFIRM_FUNC(prompt_text, default)
+        except Exception as e:
+            if e.__class__.__name__ == 'ExitRequested':
+                raise
+            return default
     return Confirm.ask(f"[bold white]{prompt_text}[/bold white]", default=default)
 
+def set_output_stream(stream):
+    """Set a custom stream for Rich console output.
+    Provide an object with a `.write(str)` method.
+    """
+    global console
+    try:
+        # 啟用 ANSI 顏色與樣式並強制解析 Rich 標記
+        console = Console(
+            file=stream,
+            force_terminal=True,
+            no_color=False,
+            soft_wrap=False,
+            markup=True,
+        )
+    except Exception:
+        # Fallback to default console if stream invalid
+        console = Console()
 
-def run_cli(auto_mode:bool=False, 
-            arrival_time="09:00", 
-            leave_time="18:00", 
-            reason="忘刷", 
-            remark=""):
-    display_welcome_banner()
+def set_io_hooks(input_func=None, confirm_func=None):
+    """設定互動 I/O 掛勾（SSH 模式可覆寫輸入/確認）。"""
+    global INPUT_FUNC, CONFIRM_FUNC
+    INPUT_FUNC = input_func
+    CONFIRM_FUNC = confirm_func
+
+@contextlib.contextmanager
+def suppress_lib_output():
+    """Temporarily suppress stdout/stderr and lower logging.
+
+    Use to hide noisy prints from third-party libraries without modifying them.
+    """
+    devnull = open(os.devnull, 'w')
+    old_out, old_err = sys.stdout, sys.stderr
+    root_logger = logging.getLogger()
+    old_level = root_logger.level
+    try:
+        sys.stdout = devnull
+        sys.stderr = devnull
+        root_logger.setLevel(logging.CRITICAL)
+        yield
+    finally:
+        root_logger.setLevel(old_level)
+        sys.stdout = old_out
+        sys.stderr = old_err
+        devnull.close()
+
+class LoggerWriter:
+    def __init__(self, logger: logging.Logger, level: int = logging.INFO):
+        self.logger = logger
+        self.level = level
+        self._buf = ""
+
+    def write(self, message: str):
+        if not isinstance(message, str):
+            message = str(message)
+        self._buf += message
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            line = line.rstrip("\r")
+            if line:
+                self.logger.log(self.level, line)
+
+    def flush(self):
+        if self._buf:
+            self.logger.log(self.level, self._buf)
+            self._buf = ""
+
+def get_agent_logger() -> logging.Logger:
+    logger = logging.getLogger("clockmate.agent")
+    logger.setLevel(logging.INFO)
+    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+
+    # Ensure file handler exists
+    has_file = any(isinstance(h, logging.FileHandler) for h in logger.handlers)
+    if not has_file:
+        fh = logging.FileHandler("agent_prints.log", encoding="utf-8")
+        fh.setFormatter(fmt)
+        logger.addHandler(fh)
+
+    # Ensure stream-to-server handler exists (server terminal)
+    has_stream = any(isinstance(h, logging.StreamHandler) and getattr(h, 'stream', None) is getattr(sys, "__stdout__", None) for h in logger.handlers)
+    if not has_stream:
+        server_stdout = getattr(sys, "__stdout__", None)
+        if server_stdout is not None:
+            sh = logging.StreamHandler(server_stdout)
+            sh.setFormatter(fmt)
+            logger.addHandler(sh)
+
+    logger.propagate = False
+    return logger
+
+@contextlib.contextmanager
+def redirect_lib_output_to_logger(logger: logging.Logger):
+    old_out, old_err = sys.stdout, sys.stderr
+    try:
+        sys.stdout = LoggerWriter(logger, logging.INFO)
+        sys.stderr = LoggerWriter(logger, logging.ERROR)
+        yield
+    finally:
+        sys.stdout = old_out
+        sys.stderr = old_err
+
+def run_llm_cli(mode="llm", output_stream=None):
+    from clockmate import prompt_create, parse_llm_output
+    # If a custom output stream is provided, rebind console to it
+    if output_stream is not None:
+        set_output_stream(output_stream)
+    # 首次執行：顯示 banner 並取得 tokens（僅在本次 SSH 連線期間一次）
+    # global SESSION_INITIALIZED
+    # if not SESSION_INITIALIZED:
+    #     display_welcome_banner(plain=False)
+    #     with redirect_lib_output_to_logger(get_agent_logger()):
+    #         from clockmate import get_tokens_from_browser
+    #         get_tokens_from_browser()
+    #     SESSION_INITIALIZED = True
     now = datetime.datetime.now()
-    default_year_month = f"{now.year}/{now.month:02d}"
+    target_year_month = f"{now.year}/{now.month:02d}"
+    accumulated_message = ""
+    if mode == "llm":
+        # console.print("[bold]目前模式: 大型語言模型[/bold]")
+        console.print("處理範圍：本月 1 日至今日")
+        console.print("預設時間 09:00-18:00")
+        console.print("預設原因：忘刷")
+        console.print(" - 直接按 [Enter]：將使用預設值")
+        console.print(" - 輸入 'exit'： 退出系統")
+        console.print("[bold]請問我可以為您做什麼呢[/bold]")
 
-    if auto_mode == False:
-        console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值。[/bold]")
-        target_year_month = prompt_with_default("填寫年月 (YYYY/MM)", default_year_month)
-        arrival_time = prompt_with_default("預設上班時間 (HH:MM)", "09:00")
-        leave_time = prompt_with_default("預設下班時間 (HH:MM)", "18:00")
-        reason = prompt_with_default("預設原因", "忘刷")
-        remark = console.input("[bold white]預設備註 (可留空)[/bold white]: ").strip()
-    else:
-        console.print("[bold]自動模式啟用，使用預設工時資料。[/bold]")
-        target_year_month = default_year_month
-        arrival_time = "09:00"
-        leave_time = "18:00"
-        reason = "忘刷"
-        remark = ""
-
-    custom_work_times = {
-        'arrival_time': arrival_time,
-        'leave_time': leave_time,
-        'reason': reason,
-        'remark': remark
-    }
-
-    summary_table = Table(show_header=False, box=box.SIMPLE_HEAVY)
-    summary_table.add_row("✨ 年月", target_year_month)
-    summary_table.add_row("⏰ 上班/下班", f"{arrival_time} - {leave_time}")
-    summary_table.add_row("📝 原因", reason)
-    summary_table.add_row("💬 備註", remark or "（無）")
-
-    console.rule("[bold cyan]設定摘要[/bold cyan]")
-    console.print(summary_table)
-
-    if not prompt_yes_no("是否繼續並生成表單資料？", True):
-        console.print("[yellow]⚠️ 已取消操作。[/yellow]")
-        return
-
-    # fetch_hidden = prompt_yes_no("要自動從系統取得最新的隱藏欄位嗎？", True)
-
-    # form_data = None
-    # session = None
-
-    # if fetch_hidden:
-    #     console.print("[cyan]🔍 嘗試從遠端抓取最新表單設定...[/cyan]")
-    #     form_data, session = get_fresh_form_data(target_year_month, custom_work_times)
-    #     if not form_data:
-    #         console.print("[yellow]⚠️ 遠端資料抓取失敗，改用離線方式生成。[/yellow]")
-    #         form_data = generate_form_data(target_year_month, custom_work_times)
-    # else:
-    #     form_data = generate_form_data(target_year_month, custom_work_times)
-
-    form_data, session = get_fresh_form_data(target_year_month, custom_work_times)
-    if not form_data:
-        console.print("[bold red]❌ 無法生成表單資料，請稍後再試。[/bold red]")
-        return
-
-    console.rule("[bold green]表單資料已完成建立[/bold green]")
-    # if fetch_hidden and session:
-    if session:
-        if prompt_yes_no("需要立即提交表單嗎？", True):
-            console.rule("[bold magenta]提交表單[/bold magenta]")
-            console.print("📝 正在提交表單...")
-            post_headers = get_post_headers(target_year_month)
-            console.print(f"[dim]📋 使用 headers: {list(post_headers.keys())}[/dim]")
-
-            submit_url = build_timesheet_url(target_year_month)
-            response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
-
-            console.print(f"[bold green]✅ 提交完成！狀態碼: {response.status_code}[/bold green]")
-
-            if response.status_code == 302:
-                location = response.headers.get('Location', '未知')
-                console.print(f"[cyan]🔄 重定向到: {location}[/cyan]")
-
-                if 'Default.aspx' not in location:
-                    console.print("[bold green]🎉 表單提交可能成功！[/bold green]")
-                else:
-                    console.print("[bold red]❌ 被重定向到登入頁面，可能需要重新認證[/bold red]")
-            elif response.status_code == 200:
-                console.print("[cyan]📄 收到回應內容:[/cyan]")
-                console.print(response.text[:300] + "..." if len(response.text) > 300 else response.text)
+        # 迴圈：若 LLM 回覆 reask，提示並請使用者重新輸入
+        accumulated_message = ""
+        # # 首次或累積後的訊息提示
+        # user_message = prompt_with_default(">")
+        
+        # # 顯示使用者剛輸入的內容，避免某些 SSH/IME 不回顯中文
+        # console.print(f"[dim]您輸入：{user_message}[/dim]")
+        
+        while True:
+            # 首次或累積後的訊息提示
+            user_message = prompt_with_default(">")
+            
+            # 顯示使用者剛輸入的內容，避免某些 SSH/IME 不回顯中文
+            console.print(f"[dim]您輸入：{user_message}[/dim]")
+            
+            # 將使用者輸入累積成單一訊息（保留上下文）
+            if accumulated_message:
+                accumulated_message = f"{user_message}\n{accumulated_message}".strip()
             else:
-                console.print(f"[yellow]❓ 未預期的狀態碼: {response.status_code}[/yellow]")
-                console.print(f"[yellow]回應內容: {response.text[:200]}[/yellow]")
+                accumulated_message = user_message.strip()
 
-            console.print(f"[dim]\n📊 回應標頭: {dict(response.headers)}[/dim]")
-        else:
-            console.print("[green]👌 表單資料已準備好，您可以稍後手動提交。[/green]")
-    else:
-        console.print("[blue]📦 表單資料已生成，請記得自行補上隱藏欄位後再提交。[/blue]")
+            console.print("[bold]思考中...[/bold]")
+            user_prompt = prompt_create(user_message=accumulated_message)
+            
+            # 定義 MCP 伺服器連接資訊（以模組方式啟動，支援安裝版與原始碼）
+            connection_info = {
+                "submit_work_times": {
+                    "command": "python",
+                    "args": ["-X", "utf8", "-m", "clockmate.llm_clockmate"],  # 注意要用 utf8 編碼執行
+                    "transport": "stdio",
+                },
+            }
+            
+            agent = akasha.agents(
+                model=MODEL,
+                temperature=0.01,
+                verbose=False,
+                max_output_tokens=10000
+            )
+            
+            response = agent.mcp_agent(connection_info, user_prompt)
+            console.print(response)
 
 
 if __name__ == "__main__":
-    run_cli()
+    run_llm_cli()

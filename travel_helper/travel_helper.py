@@ -14,13 +14,13 @@ if not val:
     # 傳 env 給子行程，並在新視窗裡 echo 該變數（/K 會保留視窗）
     # 注意：%VAR% 將在子 cmd 中被展開（子 cmd 能看到我們傳的 env）
 
-subprocess.Popen(
-        ["cmd.exe", "/K", "npm start"],
-        cwd="./mcp-google-map",
-        env=env,
-        creationflags=CREATE_NEW_CONSOLE
-    )
-print("已啟動新的 cmd 視窗（繼承 .env 變數）。")
+# subprocess.Popen(
+#         ["cmd.exe", "/K", "npm start"],
+#         cwd="./mcp-google-map",
+#         env=env,
+#         creationflags=CREATE_NEW_CONSOLE
+#     )
+# print("已啟動新的 cmd 視窗（繼承 .env 變數）。")
 """
 tool:
 search_nearby：根據位置搜尋附近地點，並可用關鍵字、距離、評分及營業時間篩選
@@ -35,7 +35,7 @@ maps_elevation：取得指定地點的海拔（高度）資料
 # prompt = """從摩斯漢堡民生店到台北101再到台北小巨蛋?"""       # tokens 16000/16000
 """從摩斯漢堡民生店開車到臺北101約3.7公里，預計需要16分鐘。接著從臺北101開車到臺北小巨蛋約3.4公里，預計需要12分鐘。"""
 
-p = "從摩斯漢堡民生店到國立臺灣體育運動大學"
+p = "從摩斯漢堡民生店到國立臺灣體育運動大學，不搭火車"
 # p = "從摩斯漢堡民生店到南京復興捷運站"
 prompt = p
 prompt = f"""
@@ -43,8 +43,37 @@ prompt = f"""
         1.預設使用大眾交通工具規劃路線(maps_directions){p}
         2.當規畫中有需要搭乘公車的部分，將起始點與終點設為開車進行距離與時間測量，若搭乘公車前後有步行規劃，連同步行行程也納入開車計算
         3.若有改為開車，則使用計程車價格(taxi_fare_estimator)計算費用
-        4.最後總計計程車與大眾交通工具(高鐵(thsr_fare_estimator))的價格
+        4.通過tools精確抓取大眾交通工具(高鐵(thsr_fare_estimator)、台鐵(tr_fare_estimator))的花費
+        5.根據以上資料進行填寫出差單的InWorkRoute欄位，並回傳符合格式List
+        6.若有多段路程，請將每段步行以外的路程以[{{"NUMBER":1,...}}, {{"NUMBER":2,...}}]的形式回傳
+        "InWorkRoute": [
+        {{
+            "NUMBER": 1,
+            "SOURCE": "R",
+            "UUID": "",
+            "FORMID": "",
+            "ORD": 0,
+            "BDATE": "<start_date, ex: 2025/12/11>",
+            "MOVER": "Y",
+            "MOVER_NAME": "<mover_name, ex: 計程車>" #僅有[高鐵,飛機,輪船,客運,火車(自強),火車(莒光),火車(復興),火車(普通),火車(電聯車),捷運,計程車,其他],
+            "MOVER_OTHER": "",
+            "BPLACE": "<begin_location>" #該路程起始點,
+            "EPLACE": "<end_location>" #該路程終點,
+            "REASON": "<reason_for_taxi>" #搭乘原因,
+            "PRICE": "<price>" #該路程費用,
+            "PRICE_FMT": "<price>" #該路程費用(同PRICE)),
+            "ACTYEAR": <ACTYEAR, ex: 2025> #出差年,
+            "PROJID": "",
+            "PROJID_NAME": "",
+            "VALID_FLAG": "1",
+            "UD_ADD": "Y",
+        }}
+    ],
         """
+
+form_prompt = """
+
+"""
 
 """
 從摩斯漢堡民生店到國立臺灣體育運動大學，預計搭乘大眾交通工具的路線總距離約183公里，總時長約2小時10分鐘，票價約新臺幣792 元。您預計在10:53 AM出發，並於1:03 PM抵達。路線涉及步行、公車、臺鐵區間車、高鐵和再次公車轉乘。詳細步驟包括：

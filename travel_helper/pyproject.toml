@@ -1,0 +1,23 @@
+[project]
+name = "travel-helper"
+version = "0.1.0"
+description = "Utilities for estimating fares and planning trips"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "Proprietary"}
+authors = [{ name = "Clockmate" }]
+dependencies = []
+
+[project.urls]
+Homepage = "https://example.com/travel-helper"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["__pycache__", "tests*"]

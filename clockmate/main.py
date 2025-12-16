@@ -393,15 +393,9 @@ def run_llm_cli(mode="llm", output_stream=None):
         # # 首次或累積後的訊息提示
         # user_message = prompt_with_default(">")
         
-        # # 顯示使用者剛輸入的內容，避免某些 SSH/IME 不回顯中文
-        # console.print(f"[dim]您輸入：{user_message}[/dim]")
-        
         while True:
             # 首次或累積後的訊息提示
             user_message = prompt_with_default(">")
-            
-            # 顯示使用者剛輸入的內容，避免某些 SSH/IME 不回顯中文
-            console.print(f"[dim]您輸入：{user_message}[/dim]")
             
             # 將使用者輸入累積成單一訊息（保留上下文）
             if accumulated_message:
@@ -419,13 +413,22 @@ def run_llm_cli(mode="llm", output_stream=None):
                     "args": ["-X", "utf8", "-m", "clockmate.llm_clockmate"],  # 注意要用 utf8 編碼執行
                     "transport": "stdio",
                 },
+                # "google-map": {
+                #     "url": "http://localhost:3000/mcp",
+                #     "transport": "streamable_http",
+                # },
+                "fare_estimator": {
+                    "command": "python",
+                    "args": ["travel_helper\\fare_estimator.py"],
+                    "transport": "stdio",
+                }
             }
             
             agent = akasha.agents(
                 model=MODEL,
                 temperature=0.01,
                 verbose=False,
-                max_output_tokens=10000
+                max_output_tokens=20000
             )
             
             response = agent.mcp_agent(connection_info, user_prompt)

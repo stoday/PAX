@@ -17,6 +17,7 @@ import logging
 import contextlib
 import akasha
 import json_repair
+import subprocess
 
 # 載入環境變數
 dotenv.load_dotenv()
@@ -28,6 +29,7 @@ console = Console()
 figlet = Figlet(font="slant")
 # 會話初始化旗標：確保特定初始化只在 SSH 連線期間執行一次
 SESSION_INITIALIZED = False
+stream_process = None
 
 def reset_session_state():
     """重置會話初始化狀態（供 SSH 連線開始時呼叫）。"""
@@ -45,6 +47,24 @@ def build_timesheet_url(year_month=None):
         encoded_ym = quote(year_month)
         return f"{BASE_TIMESHEET_URL}?YM={encoded_ym}"
     return BASE_TIMESHEET_URL
+
+def run_mcp_google_map():
+    global stream_process
+
+    if stream_process and stream_process.poll() is None:
+        print("streamable_http already running")
+        return
+    cwd = os.path.join(os.path.abspath(os.getcwd()), "mcp-google-map")
+    stream_process = subprocess.Popen(
+        ["npm", "start"],
+        cwd=cwd,
+        stdout=None,   # 或 None
+        # stdout=subprocess.PIPE,   # 或 None
+        stderr=None,
+        # stderr=subprocess.PIPE,
+        shell=True,               # Windows 一定要
+        env=os.environ.copy()
+    )
 
 def generate_form_data(year_month=None, 
                        default_work_times=None,
@@ -369,15 +389,12 @@ def run_llm_cli(mode="llm", output_stream=None):
     if output_stream is not None:
         set_output_stream(output_stream)
     # 首次執行：顯示 banner 並取得 tokens（僅在本次 SSH 連線期間一次）
-    # global SESSION_INITIALIZED
-    # if not SESSION_INITIALIZED:
-    #     display_welcome_banner(plain=False)
+    global SESSION_INITIALIZED
+    if not SESSION_INITIALIZED:
+        display_welcome_banner(plain=False)
+        run_mcp_google_map()
     #     with redirect_lib_output_to_logger(get_agent_logger()):
-    #         from clockmate import get_tokens_from_browser
-    #         get_tokens_from_browser()
-    #     SESSION_INITIALIZED = True
-    now = datetime.datetime.now()
-    target_year_month = f"{now.year}/{now.month:02d}"
+        SESSION_INITIALIZED = True
     accumulated_message = ""
     if mode == "llm":
         # console.print("[bold]目前模式: 大型語言模型[/bold]")
@@ -388,11 +405,8 @@ def run_llm_cli(mode="llm", output_stream=None):
         console.print(" - 輸入 'exit'： 退出系統")
         console.print("[bold]請問我可以為您做什麼呢[/bold]")
 
-        # 迴圈：若 LLM 回覆 reask，提示並請使用者重新輸入
+        # 迴圈：若 LLM 回覆
         accumulated_message = ""
-        # # 首次或累積後的訊息提示
-        # user_message = prompt_with_default(">")
-        
         while True:
             # 首次或累積後的訊息提示
             user_message = prompt_with_default(">")
@@ -407,19 +421,21 @@ def run_llm_cli(mode="llm", output_stream=None):
             user_prompt = prompt_create(user_message=accumulated_message)
             
             # 定義 MCP 伺服器連接資訊（以模組方式啟動，支援安裝版與原始碼）
+            travel_helper_cwd = os.path.join(os.path.abspath(os.getcwd()), "travel_helper")
+            
             connection_info = {
                 "submit_work_times": {
                     "command": "python",
                     "args": ["-X", "utf8", "-m", "clockmate.llm_clockmate"],  # 注意要用 utf8 編碼執行
                     "transport": "stdio",
                 },
-                # "google-map": {
-                #     "url": "http://localhost:3000/mcp",
-                #     "transport": "streamable_http",
-                # },
+                "google-map": {
+                    "url": "http://localhost:3000/mcp",
+                    "transport": "streamable_http",
+                },
                 "fare_estimator": {
                     "command": "python",
-                    "args": ["travel_helper\\fare_estimator.py"],
+                    "args": [f"{travel_helper_cwd}\\fare_estimator.py"],
                     "transport": "stdio",
                 }
             }
@@ -427,7 +443,8 @@ def run_llm_cli(mode="llm", output_stream=None):
             agent = akasha.agents(
                 model=MODEL,
                 temperature=0.01,
-                verbose=False,
+                # verbose=True,
+                max_input_tokens=20000,
                 max_output_tokens=20000
             )
             

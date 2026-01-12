@@ -42,12 +42,12 @@ __all__ = [
     "run_cli",
 ]
 """
-ClockMate - 工時填報助手
+Pax - 便利工作助手
 一個自動化工時表單填寫的工具
 """
 
 __version__ = "1.0.0"
-__author__ = "ClockMate Team"
+__author__ = "Pax Team"
 __email__ = "support@clockmate.com"
 
 # 延遲匯入避免循環依賴

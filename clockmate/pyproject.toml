@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clockmate"
-version = "1.0.0"
-description = "工時填報自動化助手"
+version = "2.0.0"
+description = "便利工作助手"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
@@ -63,6 +63,7 @@ Issues = "https://gitlab.com/your-username/clockmate/-/issues"
 # entry point: 指向start_services:main
 [project.scripts]
 clockmate = "clockmate.start_services:main"
+pax = "clockmate.start_services:main"
 
 [pytest]
 markers =

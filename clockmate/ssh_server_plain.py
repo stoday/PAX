@@ -86,12 +86,12 @@ class SSHShell(paramiko.ServerInterface):
                 print(f"發送訊息失敗: {e}")
     
     def run_shell(self):
-        """運行 shell 會話：持續自動執行 ClockMate，直到使用者於 ClockMate 內輸入 exit/quit。"""
+        """運行 shell 會話：持續自動執行 Pax，直到使用者於 Pax 內輸入 exit/quit。"""
         if not self.channel:
             print("錯誤: channel 未設置")
             return
         try:
-            # 持續自動執行 ClockMate（llm 模式）
+            # 持續自動執行 Pax（llm 模式）
             while True:
                 if self.channel is None or self.channel.closed:
                     break
@@ -179,7 +179,7 @@ class SSHShell(paramiko.ServerInterface):
             self.channel.send(error_text.encode('utf-8'))
 
     def run_clockmate(self, mode: str = 'llm'):
-        """在 SSH channel 中執行 ClockMate CLI，橋接 stdin/stdout。
+        """在 SSH channel 中執行 Pax CLI，橋接 stdin/stdout。
         回傳 True 代表完成並可繼續，False 代表使用者要求離開。
         """
         from clockmate.main import run_llm_cli, set_output_stream, set_io_hooks
@@ -387,7 +387,7 @@ class SSHShell(paramiko.ServerInterface):
             self.show_goodbye()
             return False
         except Exception as e:
-            self.safe_send(f"ClockMate 執行失敗: {e}")
+            self.safe_send(f"Pax 執行失敗: {e}")
             # 發生錯誤時，仍允許下一輪重試
             return True
         finally:
@@ -400,7 +400,7 @@ class SSHShell(paramiko.ServerInterface):
         goodbye_text = (
             "\r\n=============================\r\n"
             f"再見, {self.username}！\r\n"
-            "感謝使用 Clockmate\r\n"
+            "感謝使用 Pax\r\n"
             "連接即將關閉...\r\n"
             "=============================\r\n\r\n"
         )

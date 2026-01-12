@@ -238,11 +238,11 @@ def get_post_headers(year_month=None):
 def display_welcome_banner(plain: bool = False):
     console.print("\r\n")
 
-    ascii_banner = figlet.renderText("ClockMate")
+    ascii_banner = figlet.renderText("Pax")
     panel = Panel.fit(
         ascii_banner.rstrip(),
         border_style="cyan",
-        title="ClockMate 工時小幫手",
+        title="Pax 便利工作助手",
         style="bold magenta",
     )
     console.print(panel)

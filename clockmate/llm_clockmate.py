@@ -130,7 +130,7 @@ arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark="" 來產�
             "FORMID": "",
             "ORD": 0,
             "BDATE": "<start_date, ex: 2025/12/11>",
-            "MOVER": "Y",
+            "MOVER": <mover, ex: Y>, #搭乘交通工具編號僅有[高鐵:A,飛機:B,輪船:C,客運:D,火車(自強):E,火車(莒光):F,火車(復興):G,火車(普通):H,火車(電聯車):I,捷運:X,計程車:Y,其他:Z]
             "MOVER_NAME": "<mover_name, ex: 計程車>" #僅有[高鐵,飛機,輪船,客運,火車(自強),火車(莒光),火車(復興),火車(普通),火車(電聯車),捷運,計程車,其他],
             "MOVER_OTHER": "",
             "BPLACE": "<begin_location>" #該路程起始點,

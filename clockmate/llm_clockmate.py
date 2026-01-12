@@ -138,7 +138,7 @@ arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark="" 來產�
             "REASON": "<reason_for_taxi>" #搭乘原因,
             "PRICE": "<price>" #該路程費用,
             "PRICE_FMT": "<price>" #該路程費用(同PRICE)),
-            "ACTYEAR": <ACTYEAR, ex: 2025> #出差年,
+            "ACTYEAR": <ACTYEAR, ex: 2026> #出差年,
             "PROJID": "",
             "PROJID_NAME": "",
             "VALID_FLAG": "1",

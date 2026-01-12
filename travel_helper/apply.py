@@ -100,6 +100,7 @@ def dc_apply(InWorkRoute):
 
     is_submit = "N"
 
+    # 依 InWorkRoute 逐筆建立 ApplyItem（簡單映射、維持原順序，不額外抽函式）
     apply_items = []
     #三個空白加上一個預填寫(其實也是空白)
     sign_data = []
@@ -129,6 +130,31 @@ def dc_apply(InWorkRoute):
         bdate = start_d.strftime("%Y/%m/%d")
         edate = end_d.strftime("%Y/%m/%d")
         outdays = str((end_d - start_d).days + 1)
+
+    # 依照 InWorkRoute 建立 ApplyItem（僅映射有的欄位，缺少則留空）
+    if isinstance(parsed_route, list) and parsed_route:
+        for idx, r in enumerate(parsed_route, start=1):
+            bplace = r.get("BPLACE", "")
+            eplace = r.get("EPLACE", "")
+            desc1 = f"{bplace}-{eplace}" if (bplace or eplace) else ""
+            mover_name = r.get("MOVER_NAME", "")
+            item_name = "計程車資" if mover_name == "計程車" else f"交通費_{mover_name}"
+
+            apply_items.append({
+                "NUMBER": r.get("NUMBER", idx),
+                "SOURCE": r.get("SOURCE", "R"),
+                "UUID": r.get("UUID", ""),
+                "ORD": r.get("ORD", 0),
+                "ITEM_NAME": item_name,
+                "DESC1": desc1,
+                "REASON": r.get("REASON"),
+                "ACTNAME": "旅運費",
+                "ESTPRICE": r.get("PRICE", ""),
+                "ESTPRICE_FMT": r.get("PRICE_FMT", r.get("PRICE", "")),
+                "ACTYEAR": r.get("ACTYEAR", ""),
+                "PROJID": r.get("PROJID", ""),
+                "PROJID_NAME": r.get("PROJID_NAME", "")
+            })
 
     payload = {
         # ---- 系統狀態 ----
@@ -167,7 +193,7 @@ def dc_apply(InWorkRoute):
             # 使用者可提供的非自動欄位
             "ADDRESS": address,
             "BDATE": bdate,
-            "EDATE": edate,
+            "EDATE": edate,     # 預設當地來回
             "OUTDAYS": outdays, # 不知道會不會自己帶入
             "PROJID": projid,
             "ALL_PROJID_CHK": all_projid_chk, #預設N
@@ -175,35 +201,19 @@ def dc_apply(InWorkRoute):
             "COMMENTS": comments              #預設""
         }, ensure_ascii=False),
 
-        # ---- 費用項目 ----
-        "ApplyItem": json.dumps(
-            apply_items if isinstance(apply_items, list) else [
-                {
-                    "NUMBER": 1,
-                    "SOURCE": "R",
-                    "UUID": "",
-                    "ORD": 0,
-                    "ITEM_NAME": "交通費_高鐵",
-                    "DESC1": "台中-台北",  #起點-終點
-                    "ACTNAME": "旅運費",
-                    "ESTPRICE": "400",
-                    "ESTPRICE_FMT": "400",
-                    "ACTYEAR": "2026",
-                    "PROJID": projid,
-                    "PROJID_NAME": ""
-                }
-            ], ensure_ascii=False
-        ),
+        # ---- 費用項目(從InWorkRoute建立) ----
+        # {"NUMBER":2,"SOURCE":"R","UUID":"440862af-fd55-4a51-96b6-24e5c6782524","FORMID":"","ORD":0,"BDATE":"2026/01/12","MOVER":"Y","MOVER_NAME":"計程車","MOVER_OTHER":"",
+        # "BPLACE":"北車","EPLACE":"民生","REASON":"移動","PRICE":"300","PRICE_FMT":"300","ACTYEAR":2026,"PROJID":"PJ123456","PROJID_NAME":"PJ123456_頂級滷肉製程 2026/12/31_補助",
+        # "VALID_FLAG":"1","UD_ADD":"Y"}
+        "ApplyItem": json.dumps(apply_items, ensure_ascii=False),
 
         # ---- 交通路線 ----
         "InWorkRoute": json.dumps(parsed_route, ensure_ascii=False),
 
-        # ---- 尚未送出 / 簽核 ----
+        # ---- 按照預設空白處理的欄位 ----
         "SignData": json.dumps(sign_data, ensure_ascii=False),
         "InWorkDrive": json.dumps(inwork_drive, ensure_ascii=False),
         "ChgInfo": json.dumps(chg_info, ensure_ascii=False),
-
-        # ---- 預支 ----
         "prepay": json.dumps(prepay_obj, ensure_ascii=False)
     }
 
@@ -225,4 +235,55 @@ def dc_apply(InWorkRoute):
     print("\n✅ 暫存完成")
     print("👉 請使用者登入後打開以下頁面查看並自行送出：")
     print(FORM_URL)
+
+if __name__ == "__main__":
+    # 簡單執行入口：從命令列傳入 JSON 字串或檔案路徑，否則使用示範資料
+    import sys, os, json
+
+    InWorkRoute = []
+
+    if len(sys.argv) > 1:
+        arg = sys.argv[1]
+        if os.path.isfile(arg):
+            try:
+                with open(arg, "r", encoding="utf-8") as f:
+                    InWorkRoute = json.load(f)
+            except Exception:
+                InWorkRoute = []
+        else:
+            try:
+                InWorkRoute = json.loads(arg)
+            except Exception:
+                InWorkRoute = []
+
+    if not isinstance(InWorkRoute, list):
+        InWorkRoute = []
+
+    # 若未提供或解析失敗，使用一筆示範資料
+    if not InWorkRoute:
+        InWorkRoute = [
+            {
+                "NUMBER": 1,
+                "SOURCE": "R",
+                "UUID": "",
+                "FORMID": "",
+                "ORD": 0,
+                "BDATE": "2026/01/12",
+                "MOVER": "Y",
+                "MOVER_NAME": "計程車",
+                "MOVER_OTHER": "",
+                "BPLACE": "北車",
+                "EPLACE": "民生",
+                "REASON": "移動",
+                "PRICE": "300",
+                "PRICE_FMT": "300",
+                "ACTYEAR": "2026",
+                "PROJID": "",
+                "PROJID_NAME": "",
+                "VALID_FLAG": "1",
+                "UD_ADD": "Y"
+            }
+        ]
+
+    dc_apply(InWorkRoute)
 

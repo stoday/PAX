@@ -3,10 +3,11 @@ import requests
 import json
 import platform
 from urllib.parse import quote
+from bs4 import BeautifulSoup
+import dotenv
+dotenv.load_dotenv()
 
 mcp = FastMCP("math")
-
-DC_APPLY_URL = "https://expapply.iii.org.tw/expapply/Apply/DC.aspx"
 
 def get_dynamic_platform_info():
     """根據當前系統生成平台資訊"""
@@ -56,7 +57,7 @@ def get_dynamic_user_agent():
         return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
 
-def get_post_headers(year_month=None):
+def get_post_headers():
     """取得 POST 提交時的完整 headers（根據當前系統環境）"""
     user_agent = get_dynamic_user_agent()
     platform_info = get_dynamic_platform_info()
@@ -122,14 +123,13 @@ def dc_apply(InWorkRoute):
     """
     import requests
     import json
-    from bs4 import BeautifulSoup
 
     # ===============================
     # 1. 基本設定
     # ===============================
 
     FORM_URL = "https://expapply.iii.org.tw/expApply/Apply/DC.aspx"
-    SAVE_URL = "https://expapply.iii.org.tw/expApply/Apply/DC.aspx'SaveDC"  # ⚠️請確認 Network 中實際暫存 URL
+    SAVE_URL = "https://expapply.iii.org.tw/expApply/Apply/DC.aspx/SaveDC"  # ⚠️請確認 Network 中實際暫存 URL
 
     session = requests.Session()
 
@@ -143,8 +143,11 @@ def dc_apply(InWorkRoute):
     # 2. 先 GET 表單頁（建立 session / 取得基本資料）
     # ===============================
 
-    resp = session.get(FORM_URL)
+    post_headers = get_post_headers()
+    resp = session.get(SAVE_URL, headers=post_headers)
     resp.raise_for_status()
+    # 解析 HTML 取得隱藏欄位
+    soup = BeautifulSoup(resp.text, 'html.parser')
 
     # ===============================
     # 3. 組「暫存用」payload（IS_SUBMIT = N）
@@ -293,7 +296,7 @@ def dc_apply(InWorkRoute):
     print("組成的 payload 如下：")
     print(json.dumps(payload, ensure_ascii=False, indent=4))
     # ===============================
-    # 4. 設定 cookies 並 POST 暫存（不送出）
+    # 4. 設定 cookies, 處理登入認證, POST 暫存（不送出）
     # ===============================
 
     # 設定重要的認證 cookies
@@ -310,8 +313,26 @@ def dc_apply(InWorkRoute):
 
     for name, value in cookie_values.items():
         if value:
-            session.cookies.set(name, value, domain='hrwt.iii.org.tw')
-
+            session.cookies.set(name, value, domain='expapply.iii.org.tw')
+    
+    viewstate = soup.find('input', {'name': '__VIEWSTATE'})
+    viewstate_generator = soup.find('input', {'name': '__VIEWSTATEGENERATOR'})
+    event_validation = soup.find('input', {'name': '__EVENTVALIDATION'})
+    
+    if not all([viewstate, viewstate_generator, event_validation]):
+        print("[bold red] 無法找到必要的隱藏欄位，可能需要重新登入[/bold red]", file=sys.stderr)
+        print(f"[red]找到 __VIEWSTATE: {viewstate is not None}[/red]", file=sys.stderr)
+        print(f"[red]找到 __VIEWSTATEGENERATOR: {viewstate_generator is not None}[/red]", file=sys.stderr)
+        print(f"[red]找到 __EVENTVALIDATION: {event_validation is not None}[/red]", file=sys.stderr)
+        return None, None
+    
+    # 使用從網頁取得的最新隱藏欄位更新表單資料
+    payload['__VIEWSTATE'] = viewstate['value']
+    payload['__VIEWSTATEGENERATOR'] = viewstate_generator['value']
+    payload['__EVENTVALIDATION'] = event_validation['value']
+    
+    print("[bold green] 成功取得所有隱藏欄位[/bold green]", file=sys.stderr)
+    
     save_resp = session.post(SAVE_URL, data=payload, headers=HEADERS)
     save_resp.raise_for_status()
 

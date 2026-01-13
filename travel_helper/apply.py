@@ -80,7 +80,19 @@ def get_post_headers():
         "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": platform_info
     }
+import json
+from typing import Any, Dict
 
+def build_savedc_payload(**kwargs) -> Dict[str, str]:
+    """
+    將所有欄位轉成：
+    key: JSON 字串（string）
+    """
+    payload = {}
+    for key, value in kwargs.items():
+        payload[key] = json.dumps(value, ensure_ascii=False)
+    return payload
+ 
 @mcp.tool()
 def dc_apply(InWorkRoute):
     """
@@ -132,20 +144,31 @@ def dc_apply(InWorkRoute):
     SAVE_URL = "https://expapply.iii.org.tw/expApply/Apply/DC.aspx/SaveDC"  # ⚠️請確認 Network 中實際暫存 URL
 
     session = requests.Session()
-
-    HEADERS = {
-        "User-Agent": "Mozilla/5.0",
-        "X-Requested-With": "XMLHttpRequest",
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
-    }
-
+    user_agent = get_dynamic_user_agent()
+    platform_info = get_dynamic_platform_info()
     # ===============================
     # 2. 先 GET 表單頁（建立 session / 取得基本資料）
     # ===============================
 
-    post_headers = get_post_headers()
-    resp = session.get(SAVE_URL, headers=post_headers)
-    resp.raise_for_status()
+    login_headers = {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Encoding": "gzip, deflate, br, zstd",
+        "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+        "Cache-Control": "max-age=0", #delete?
+        "Connection": "keep-alive",
+        "Host": "expapply.iii.org.tw",
+        "Sec-Fetch-Dest": "empty",  # "document",?
+        "Sec-Fetch-Mode": "cors",   # "navigate",?
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "User-Agent": user_agent,
+        "sec-ch-ua": '"Microsoft Edge";v="143s", "Chromium";v="143", "Not A(Brand";v="24"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": platform_info
+    }
+    resp = session.get(SAVE_URL, headers=login_headers)
+    # resp.raise_for_status()
     # 解析 HTML 取得隱藏欄位
     soup = BeautifulSoup(resp.text, 'html.parser')
 
@@ -235,12 +258,12 @@ def dc_apply(InWorkRoute):
 
     payload = {
         # ---- 系統狀態 ----
-        "AppData": json.dumps({
+        "AppData": {
             "IS_SUBMIT": is_submit
-        }, ensure_ascii=False),
+        },
 
         # ---- 表單主檔 ---- 自動帶入
-        "BasicData": json.dumps({
+        "BasicData": {
             "FORM_TYPE": "DC",
             # 以下為系統自動帶入欄位，統一填空字串
             "APY_EMP": "",
@@ -254,14 +277,14 @@ def dc_apply(InWorkRoute):
             "ORG_FORMID": "",
             "FORMID": "",
             "PREPAYMENT": "",
-            "ACC_AMT": "",
-            "REASON": "",
+            "ACC_AMT": "0",
+            "REASON": "出差事由待填",
             "IS_DISPATCH":"",
             "IS_SUBMIT": is_submit
-        }, ensure_ascii=False),
+        },
 
         # ---- 出差內容 ----
-        "InWorkCont": json.dumps({
+        "InWorkCont": {
             "REASON": cont_reason,
             # 系統自動帶入者改為空字串
             "APY_NAME": "",
@@ -276,25 +299,27 @@ def dc_apply(InWorkRoute):
             "ALL_PROJID_CHK": all_projid_chk, #預設N
             "NO_PROJID_CHK": no_projid_chk,   #預設N
             "COMMENTS": comments              #預設""
-        }, ensure_ascii=False),
+        },
 
         # ---- 費用項目(從InWorkRoute建立) ----
         # {"NUMBER":2,"SOURCE":"R","UUID":"440862af-fd55-4a51-96b6-24e5c6782524","FORMID":"","ORD":0,"BDATE":"2026/01/12","MOVER":"Y","MOVER_NAME":"計程車","MOVER_OTHER":"",
         # "BPLACE":"北車","EPLACE":"民生","REASON":"移動","PRICE":"300","PRICE_FMT":"300","ACTYEAR":2026,"PROJID":"PJ123456","PROJID_NAME":"PJ123456_頂級滷肉製程 2026/12/31_補助",
         # "VALID_FLAG":"1","UD_ADD":"Y"}
-        "ApplyItem": json.dumps(apply_items, ensure_ascii=False),
+        "ApplyItem": apply_items,
 
         # ---- 交通路線 ----
-        "InWorkRoute": json.dumps(parsed_route, ensure_ascii=False),
+        "InWorkRoute": parsed_route,
 
         # ---- 按照預設空白處理的欄位 ----
-        "SignData": json.dumps(sign_data, ensure_ascii=False),
-        "InWorkDrive": json.dumps(inwork_drive, ensure_ascii=False),
-        "ChgInfo": json.dumps(chg_info, ensure_ascii=False),
-        "prepay": json.dumps(prepay_obj, ensure_ascii=False)
+        "SignData": sign_data,
+        "InWorkDrive": inwork_drive,
+        "ChgInfo": chg_info,
+        "prepay": prepay_obj
     }
-    print("組成的 payload 如下：")
+    payload = build_savedc_payload(**payload)
+    print("轉換後的 payload 如下：")
     print(json.dumps(payload, ensure_ascii=False, indent=4))
+
     # ===============================
     # 4. 設定 cookies, 處理登入認證, POST 暫存（不送出）
     # ===============================
@@ -324,17 +349,20 @@ def dc_apply(InWorkRoute):
         print(f"[red]找到 __VIEWSTATE: {viewstate is not None}[/red]", file=sys.stderr)
         print(f"[red]找到 __VIEWSTATEGENERATOR: {viewstate_generator is not None}[/red]", file=sys.stderr)
         print(f"[red]找到 __EVENTVALIDATION: {event_validation is not None}[/red]", file=sys.stderr)
-        return None, None
     
     # 使用從網頁取得的最新隱藏欄位更新表單資料
     payload['__VIEWSTATE'] = viewstate['value']
     payload['__VIEWSTATEGENERATOR'] = viewstate_generator['value']
-    payload['__EVENTVALIDATION'] = event_validation['value']
+    # payload['__EVENTVALIDATION'] = event_validation['value']
     
     print("[bold green] 成功取得所有隱藏欄位[/bold green]", file=sys.stderr)
     
-    save_resp = session.post(SAVE_URL, data=payload, headers=HEADERS)
-    save_resp.raise_for_status()
+    save_resp = session.post(
+        "https://expapply.iii.org.tw/expApply/Apply/DC.aspx/SaveDC",
+        data=json.dumps(payload, ensure_ascii=False), 
+        headers=get_post_headers()
+    )
+    # save_resp.raise_for_status()
 
     print("暫存狀態碼:", save_resp.status_code)
     print("暫存回應內容:")

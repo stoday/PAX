@@ -43,6 +43,9 @@ setup(
             "clockmate=clockmate.start_services:start_ssh_server",
             # 新別名：Pax
             "pax=clockmate.start_services:start_ssh_server",
+            # 取得登入相關 Cookie/Token 的指令（與 .env.example 說明一致）
+            "clockmate-token=clockmate.get_token:get_tokens_from_browser",
+            "pax-token=clockmate.get_token:get_tokens_from_browser",
         ],
     },
     include_package_data=True,

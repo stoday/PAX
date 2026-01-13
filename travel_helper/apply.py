@@ -129,7 +129,7 @@ def dc_apply(InWorkRoute):
     # ===============================
 
     FORM_URL = "https://expapply.iii.org.tw/expApply/Apply/DC.aspx"
-    SAVE_URL = "https://expapply.iii.org.tw/expApply/Apply/SaveTemp"  # ⚠️請確認 Network 中實際暫存 URL
+    SAVE_URL = "https://expapply.iii.org.tw/expApply/Apply/DC.aspx'SaveDC"  # ⚠️請確認 Network 中實際暫存 URL
 
     session = requests.Session()
 
@@ -293,8 +293,24 @@ def dc_apply(InWorkRoute):
     print("組成的 payload 如下：")
     print(json.dumps(payload, ensure_ascii=False, indent=4))
     # ===============================
-    # 4. POST 暫存（不送出）
+    # 4. 設定 cookies 並 POST 暫存（不送出）
     # ===============================
+
+    # 設定重要的認證 cookies
+    cookie_values = {
+        'ASP.NET_SessionId': os.getenv("ASP_NET_SESSION_ID", ""),
+        'clientTicket': os.getenv("CLIENT_TICKET", ""),
+        'clientUserName': os.getenv("CLIENT_USERNAME", ""),
+    }
+    missing_cookies = [name for name, value in cookie_values.items() if not value]
+    if missing_cookies:
+        print(f"[yellow].env 中缺少 cookie 值: {', '.join(missing_cookies)}，請先執行 get_token.py[/yellow]", file=sys.stderr)
+    else:
+        print("[green]已從 .env 讀取登入 cookie。[/green]", file=sys.stderr)
+
+    for name, value in cookie_values.items():
+        if value:
+            session.cookies.set(name, value, domain='hrwt.iii.org.tw')
 
     save_resp = session.post(SAVE_URL, data=payload, headers=HEADERS)
     save_resp.raise_for_status()

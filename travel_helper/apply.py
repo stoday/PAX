@@ -1,10 +1,84 @@
 from mcp.server.fastmcp import FastMCP  # noqa: E402
 import requests
 import json
+import platform
+from urllib.parse import quote
 
 mcp = FastMCP("math")
 
 DC_APPLY_URL = "https://expapply.iii.org.tw/expapply/Apply/DC.aspx"
+
+def get_dynamic_platform_info():
+    """根據當前系統生成平台資訊"""
+    system = platform.system()
+    if system == "Darwin":
+        return '"macOS"'
+    elif system == "Windows":
+        return '"Windows"'
+    elif system == "Linux":
+        return '"Linux"'
+    else:
+        return '"Unknown"'
+
+
+def get_dynamic_user_agent():
+    """根據當前系統環境動態生成 User-Agent"""
+    system = platform.system()
+    system_version = platform.release()
+    
+    # 嘗試使用更真實的系統版本資訊
+    if system == "Darwin":  # macOS
+        try:
+            mac_version = platform.mac_ver()[0]
+            # 將 macOS 版本格式化為正確格式 (例: 10.15.7 -> 10_15_7)
+            formatted_version = mac_version.replace('.', '_')
+            return f"Mozilla/5.0 (Macintosh; Intel Mac OS X {formatted_version}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+        except:
+            return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    
+    elif system == "Windows":
+        try:
+            # Windows 版本對應
+            version_map = {
+                '10': '10.0',
+                '11': '10.0',  # Windows 11 仍然報告為 NT 10.0
+            }
+            win_version = version_map.get(platform.release(), '10.0')
+            return f"Mozilla/5.0 (Windows NT {win_version}; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+        except:
+            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    
+    elif system == "Linux":
+        return f"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    
+    else:
+        # 預設回退 User-Agent
+        return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+
+
+def get_post_headers(year_month=None):
+    """取得 POST 提交時的完整 headers（根據當前系統環境）"""
+    user_agent = get_dynamic_user_agent()
+    platform_info = get_dynamic_platform_info()
+    
+    return {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Encoding": "gzip, deflate, br, zstd",
+        "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+        "Connection": "keep-alive",
+        "Content-Type": "application/json; charset=UTF-8",
+        "Host": "expapply.iii.org.tw",
+        "Origin": "https://expapply.iii.org.tw",
+        "Referer": "https://expapply.iii.org.tw/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+        "Upgrade-Insecure-Requests": "1",
+        "User-Agent": user_agent,
+        "sec-ch-ua": '"Microsoft Edge";v="143s", "Chromium";v="143", "Not A(Brand";v="24"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": platform_info
+    }
 
 @mcp.tool()
 def dc_apply(InWorkRoute):
@@ -216,7 +290,8 @@ def dc_apply(InWorkRoute):
         "ChgInfo": json.dumps(chg_info, ensure_ascii=False),
         "prepay": json.dumps(prepay_obj, ensure_ascii=False)
     }
-
+    print("組成的 payload 如下：")
+    print(json.dumps(payload, ensure_ascii=False, indent=4))
     # ===============================
     # 4. POST 暫存（不送出）
     # ===============================

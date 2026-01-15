@@ -113,7 +113,7 @@ arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark="" 來產�
 如果使用者有指定那些日期需要填寫工時，例如: 12月3日與4日上班時間10點和9點，則生成該日期的工時資訊為:
 {"work_times":{"20251203":{"arrival_time":"10:00","leave_time":"18:00","reason":"忘刷","remark":""},
  "20251204":{"arrival_time":"09:00","leave_time":"18:00","reason":"忘刷","remark":""}}
-就好。
+完成工時生成後，使用tool submit_work_times將工時資料提交到系統中。
 """ + """
 # 出差單填寫規則:
     1.預設使用大眾交通工具規劃路線(maps_directions)
@@ -145,6 +145,7 @@ arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark="" 來產�
             "UD_ADD": "Y",
         }
     ],
+    7. 產生完以上list後，使用tool dc_apply將出差單資料提交到系統中。
 """ + f"""
 # 使用者訊息:
 {user_message}

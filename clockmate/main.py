@@ -437,15 +437,20 @@ def run_llm_cli(mode="llm", output_stream=None):
                     "command": "python",
                     "args": [f"{travel_helper_cwd}\\fare_estimator.py"],
                     "transport": "stdio",
+                },
+                "dc_apply": {
+                    "command": "python",
+                    "args": [f"{travel_helper_cwd}\\apply.py"],
+                    "transport": "stdio",
                 }
             }
             
             agent = akasha.agents(
                 model=MODEL,
                 temperature=0.01,
-                # verbose=True,
-                max_input_tokens=20000,
-                max_output_tokens=20000
+                verbose=True,
+                max_input_tokens=50000,
+                max_output_tokens=50000
             )
             
             response = agent.mcp_agent(connection_info, user_prompt)

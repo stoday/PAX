@@ -51,7 +51,6 @@ dependencies = [
     "webdriver-manager>=3.8.0",
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
-    "paramiko==4.0.0",
     "akasha-terminal==0.9.13",
 ]
 

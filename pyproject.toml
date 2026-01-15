@@ -34,7 +34,6 @@ dependencies = [
     "rich>=12.0.0",
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
-    "paramiko>=3.4.0",
 ]
 
 [project.urls]
@@ -43,7 +42,5 @@ Repository = "https://gitlab.com/your-username/clockmate.git"
 Issues = "https://gitlab.com/your-username/clockmate/-/issues"
 
 [project.scripts]
-clockmate = "clockmate.cli:main"
-clockmate-token = "clockmate.cli:get_token"
-pax = "clockmate.start_services:start_ssh_server"
+clockmate-token = "clockmate.get_token:get_tokens_from_browser"
 pax-token = "clockmate.get_token:get_tokens_from_browser"

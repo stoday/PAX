@@ -39,10 +39,6 @@ setup(
     install_requires=read_requirements(),
     entry_points={
         "console_scripts": [
-            # 主命令：直接啟動 SSH 服務（封裝於套件內路徑）
-            "clockmate=clockmate.start_services:start_ssh_server",
-            # 新別名：Pax
-            "pax=clockmate.start_services:start_ssh_server",
             # 取得登入相關 Cookie/Token 的指令（與 .env.example 說明一致）
             "clockmate-token=clockmate.get_token:get_tokens_from_browser",
             "pax-token=clockmate.get_token:get_tokens_from_browser",

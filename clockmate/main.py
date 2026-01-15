@@ -1,52 +1,19 @@
-import requests
-from urllib.parse import quote
-from bs4 import BeautifulSoup
-import platform
-import datetime
-import calendar
 from pyfiglet import Figlet
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Confirm
-from rich.table import Table
-from rich import box
 import dotenv
 import os
-import sys
-import logging
-import contextlib
 import akasha
-import json_repair
 import subprocess
 
 # 載入環境變數
 dotenv.load_dotenv()
 
 MODEL = "gemini:gemini-2.5-flash"
-BASE_TIMESHEET_URL = "https://hrwt.iii.org.tw/TSM/MyWorkTime.aspx"
-TIMESHEET_ORIGIN = "https://hrwt.iii.org.tw"
 console = Console()
 figlet = Figlet(font="slant")
-# 會話初始化旗標：確保特定初始化只在 SSH 連線期間執行一次
-SESSION_INITIALIZED = False
 stream_process = None
 
-def reset_session_state():
-    """重置會話初始化狀態（供 SSH 連線開始時呼叫）。"""
-    global SESSION_INITIALIZED
-    SESSION_INITIALIZED = False
-
-# 可選的 I/O 掛勾（供 SSH 路徑覆寫互動輸入確認）
-INPUT_FUNC = None  # Callable[[str, object], str]
-CONFIRM_FUNC = None  # Callable[[str, bool], bool]
-
-
-def build_timesheet_url(year_month=None):
-    """Construct the timesheet URL optionally bound to a specific year/month."""
-    if year_month:
-        encoded_ym = quote(year_month)
-        return f"{BASE_TIMESHEET_URL}?YM={encoded_ym}"
-    return BASE_TIMESHEET_URL
 
 def run_mcp_google_map():
     global stream_process
@@ -54,7 +21,7 @@ def run_mcp_google_map():
     if stream_process and stream_process.poll() is None:
         print("streamable_http already running")
         return
-    cwd = os.path.join(os.path.abspath(os.getcwd()), "mcp-google-map")
+    cwd = os.path.join(os.path.abspath(os.getcwd()), "tools", "mcp-google-map")
     stream_process = subprocess.Popen(
         ["npm", "start"],
         cwd=cwd,
@@ -65,175 +32,6 @@ def run_mcp_google_map():
         shell=True,               # Windows 一定要
         env=os.environ.copy()
     )
-
-def generate_form_data(year_month=None, 
-                       default_work_times=None,
-                       until_date=None):
-    """
-    自動生成工時表單資料
-    
-    Args:
-        year_month (str): 年月，格式如 "2025/10"，如果不提供則使用當前月份
-        default_work_times (dict): 預設工作時間設定，格式如：
-            {
-                'arrival_time': '09:00',    # 預設上班時間
-                'leave_time': '18:00',      # 預設下班時間
-                'reason': '忘刷',           # 預設原因
-                'remark': ''                # 預設備註
-            }
-    
-    Returns:
-        dict: 完整的表單資料
-    """
-    # 如果沒有提供年月，使用當前年月
-    if year_month is None:
-        now = datetime.datetime.now()
-        year_month = f"{now.year}/{now.month:02d}"
-    
-    # 預設工作時間設定
-    if default_work_times is None:
-        default_work_times = {
-            'arrival_time': '09:00',
-            'leave_time': '18:00', 
-            'reason': '忘刷',
-            'remark': ''
-        }
-    
-    # 解析年月
-    try:
-        year, month = year_month.split('/')
-        year = int(year)
-        month = int(month)
-    except ValueError:
-        raise ValueError("年月格式錯誤，請使用 'YYYY/MM' 格式，例如 '2025/10'")
-    
-    # 基本表單資料（隱藏欄位會在後續動態更新）
-    form_data = {
-        "__EVENTTARGET": "ctl00$ContentPlaceHolder1$btnEdit",
-        "__EVENTARGUMENT": "",
-        "__VIEWSTATE": "<GET_FROM_BROWSER>",
-        "__VIEWSTATEGENERATOR": "<GET_FROM_BROWSER>",
-        "__EVENTVALIDATION": "<GET_FROM_BROWSER>",
-        "ctl00$ContentPlaceHolder1$txb_StDay": year_month,
-    }
-    
-    # 取得該月的天數
-    days_in_month = calendar.monthrange(year, month)[1]
-    if until_date is None or until_date > days_in_month:
-        until_date = days_in_month
-
-    # 生成每一天的表單欄位
-    work_days = []  # 記錄工作日
-    holidays = []   # 記錄假日
-
-    for day in range(1, (until_date) + 1):
-        date_str = f"{year}{month:02d}{day:02d}"  # 格式: 20251001
-        
-        # 判斷是否為工作日 (週一到週五)
-        date_obj = datetime.date(year, month, day)
-        is_workday = date_obj.weekday() < 5  # 0-4 是週一到週五
-        
-        if is_workday:
-            # 工作日：填入預設時間
-            form_data[f"ctl00$ContentPlaceHolder1$txtArr_{date_str}"] = default_work_times['arrival_time']
-            form_data[f"ctl00$ContentPlaceHolder1$txtLev_{date_str}"] = default_work_times['leave_time']
-            form_data[f"ctl00$ContentPlaceHolder1$Dp_{date_str}"] = default_work_times['reason']
-            form_data[f"ctl00$ContentPlaceHolder1$txtR_{date_str}"] = default_work_times['remark']
-            work_days.append(date_str)
-        else:
-            # 假日：空白
-            form_data[f"ctl00$ContentPlaceHolder1$txtArr_{date_str}"] = ""
-            form_data[f"ctl00$ContentPlaceHolder1$txtLev_{date_str}"] = ""
-            form_data[f"ctl00$ContentPlaceHolder1$Dp_{date_str}"] = ""
-            form_data[f"ctl00$ContentPlaceHolder1$txtR_{date_str}"] = ""
-            holidays.append(date_str)
-    
-    # 添加隱藏的控制欄位（根據你原本的資料格式）
-    form_data["ctl00$ContentPlaceHolder1$HidWkHCtrl"] = ";".join(holidays)
-    form_data["ctl00$ContentPlaceHolder1$HidWkACtrl"] = ";".join(work_days)
-    form_data["ctl00$ContentPlaceHolder1$HideStTimes"] = ""
-    form_data["ctl00$ContentPlaceHolder1$HidEdTimes"] = ""
-    
-    console.print(f"[bold green]📅 生成 {year_month} 的表單資料[/bold green]")
-    console.print(f"[cyan]📊 工作日: {len(work_days)} 天[/cyan]")
-    console.print(f"[cyan]🏖️ 假日: {len(holidays)} 天[/cyan]")
-    console.print(f"[magenta]⏰ 預設上班時間: {default_work_times['arrival_time']}[/magenta]")
-    console.print(f"[magenta]⏰ 預設下班時間: {default_work_times['leave_time']}[/magenta]")
-    
-    return form_data
-
-def get_dynamic_user_agent():
-    """根據當前系統環境動態生成 User-Agent"""
-    system = platform.system()
-    system_version = platform.release()
-    
-    # 嘗試使用更真實的系統版本資訊
-    if system == "Darwin":  # macOS
-        try:
-            mac_version = platform.mac_ver()[0]
-            # 將 macOS 版本格式化為正確格式 (例: 10.15.7 -> 10_15_7)
-            formatted_version = mac_version.replace('.', '_')
-            return f"Mozilla/5.0 (Macintosh; Intel Mac OS X {formatted_version}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-        except:
-            return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-    
-    elif system == "Windows":
-        try:
-            # Windows 版本對應
-            version_map = {
-                '10': '10.0',
-                '11': '10.0',  # Windows 11 仍然報告為 NT 10.0
-            }
-            win_version = version_map.get(platform.release(), '10.0')
-            return f"Mozilla/5.0 (Windows NT {win_version}; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-        except:
-            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-    
-    elif system == "Linux":
-        return f"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-    
-    else:
-        # 預設回退 User-Agent
-        return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-
-def get_dynamic_platform_info():
-    """根據當前系統生成平台資訊"""
-    system = platform.system()
-    if system == "Darwin":
-        return '"macOS"'
-    elif system == "Windows":
-        return '"Windows"'
-    elif system == "Linux":
-        return '"Linux"'
-    else:
-        return '"Unknown"'
-
-def get_post_headers(year_month=None):
-    """取得 POST 提交時的完整 headers（根據當前系統環境）"""
-    user_agent = get_dynamic_user_agent()
-    platform_info = get_dynamic_platform_info()
-    referer_url = build_timesheet_url(year_month)
-    
-    return {
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-        "Accept-Encoding": "gzip, deflate, br, zstd",
-        "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
-        "Cache-Control": "max-age=0",
-        "Connection": "keep-alive",
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Host": "hrwt.iii.org.tw",
-        "Origin": TIMESHEET_ORIGIN,
-        "Referer": referer_url,
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "same-origin",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1",
-        "User-Agent": user_agent,
-        "sec-ch-ua": '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": platform_info
-    }
 
 def display_welcome_banner(plain: bool = False):
     console.print("\r\n")
@@ -249,20 +47,6 @@ def display_welcome_banner(plain: bool = False):
 
 
 def prompt_with_default(prompt_text, default_value=None):
-    # 若有自訂輸入掛勾，使用簡單文字提示
-    if default_value is not None:
-        prompt_plain = f"{prompt_text} 預設值: [{default_value}]:"
-    else:
-        prompt_plain = f"{prompt_text}:"
-    if INPUT_FUNC:
-        try:
-            val = INPUT_FUNC(prompt_plain, default_value)
-        except Exception as e:
-            # 讓自訂的 ExitRequested 例外傳遞以便 SSH 層捕捉並斷線
-            if e.__class__.__name__ == 'ExitRequested':
-                raise
-            val = ""
-        return (val or default_value) if default_value is not None else (val or "")
     # 始終使用 Rich 標記以確保渲染樣式
     if default_value:
         prompt = f"[bold white]{prompt_text}[/bold white] [[cyan]{default_value}[/cyan]]: "
@@ -271,133 +55,13 @@ def prompt_with_default(prompt_text, default_value=None):
     user_input = console.input(prompt).strip()
     return user_input or (default_value if default_value is not None else "")
 
-
-def prompt_yes_no(prompt_text, default=True):
-    if CONFIRM_FUNC:
-        try:
-            return CONFIRM_FUNC(prompt_text, default)
-        except Exception as e:
-            if e.__class__.__name__ == 'ExitRequested':
-                raise
-            return default
-    return Confirm.ask(f"[bold white]{prompt_text}[/bold white]", default=default)
-
-def set_output_stream(stream):
-    """Set a custom stream for Rich console output.
-    Provide an object with a `.write(str)` method.
-    """
-    global console
-    try:
-        # 啟用 ANSI 顏色與樣式並強制解析 Rich 標記
-        console = Console(
-            file=stream,
-            force_terminal=True,
-            no_color=False,
-            soft_wrap=False,
-            markup=True,
-        )
-    except Exception:
-        # Fallback to default console if stream invalid
-        console = Console()
-
-def set_io_hooks(input_func=None, confirm_func=None):
-    """設定互動 I/O 掛勾（SSH 模式可覆寫輸入/確認）。"""
-    global INPUT_FUNC, CONFIRM_FUNC
-    INPUT_FUNC = input_func
-    CONFIRM_FUNC = confirm_func
-
-@contextlib.contextmanager
-def suppress_lib_output():
-    """Temporarily suppress stdout/stderr and lower logging.
-
-    Use to hide noisy prints from third-party libraries without modifying them.
-    """
-    devnull = open(os.devnull, 'w')
-    old_out, old_err = sys.stdout, sys.stderr
-    root_logger = logging.getLogger()
-    old_level = root_logger.level
-    try:
-        sys.stdout = devnull
-        sys.stderr = devnull
-        root_logger.setLevel(logging.CRITICAL)
-        yield
-    finally:
-        root_logger.setLevel(old_level)
-        sys.stdout = old_out
-        sys.stderr = old_err
-        devnull.close()
-
-class LoggerWriter:
-    def __init__(self, logger: logging.Logger, level: int = logging.INFO):
-        self.logger = logger
-        self.level = level
-        self._buf = ""
-
-    def write(self, message: str):
-        if not isinstance(message, str):
-            message = str(message)
-        self._buf += message
-        while "\n" in self._buf:
-            line, self._buf = self._buf.split("\n", 1)
-            line = line.rstrip("\r")
-            if line:
-                self.logger.log(self.level, line)
-
-    def flush(self):
-        if self._buf:
-            self.logger.log(self.level, self._buf)
-            self._buf = ""
-
-def get_agent_logger() -> logging.Logger:
-    logger = logging.getLogger("clockmate.agent")
-    logger.setLevel(logging.INFO)
-    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-
-    # Ensure file handler exists
-    has_file = any(isinstance(h, logging.FileHandler) for h in logger.handlers)
-    if not has_file:
-        fh = logging.FileHandler("agent_prints.log", encoding="utf-8")
-        fh.setFormatter(fmt)
-        logger.addHandler(fh)
-
-    # Ensure stream-to-server handler exists (server terminal)
-    has_stream = any(isinstance(h, logging.StreamHandler) and getattr(h, 'stream', None) is getattr(sys, "__stdout__", None) for h in logger.handlers)
-    if not has_stream:
-        server_stdout = getattr(sys, "__stdout__", None)
-        if server_stdout is not None:
-            sh = logging.StreamHandler(server_stdout)
-            sh.setFormatter(fmt)
-            logger.addHandler(sh)
-
-    logger.propagate = False
-    return logger
-
-@contextlib.contextmanager
-def redirect_lib_output_to_logger(logger: logging.Logger):
-    old_out, old_err = sys.stdout, sys.stderr
-    try:
-        sys.stdout = LoggerWriter(logger, logging.INFO)
-        sys.stderr = LoggerWriter(logger, logging.ERROR)
-        yield
-    finally:
-        sys.stdout = old_out
-        sys.stderr = old_err
-
-def run_llm_cli(mode="llm", output_stream=None):
-    from clockmate import prompt_create, parse_llm_output
-    # If a custom output stream is provided, rebind console to it
-    if output_stream is not None:
-        set_output_stream(output_stream)
-    # 首次執行：顯示 banner 並取得 tokens（僅在本次 SSH 連線期間一次）
-    global SESSION_INITIALIZED
-    if not SESSION_INITIALIZED:
-        display_welcome_banner(plain=False)
-        run_mcp_google_map()
-    #     with redirect_lib_output_to_logger(get_agent_logger()):
-        SESSION_INITIALIZED = True
+def run_llm_cli(mode="llm"):
+    from clockmate import prompt_create
+    # 顯示 banner 並啟動必要服務
+    run_mcp_google_map()
+    display_welcome_banner(plain=False)
     accumulated_message = ""
     if mode == "llm":
-        # console.print("[bold]目前模式: 大型語言模型[/bold]")
         console.print("處理範圍：本月 1 日至今日")
         console.print("預設時間 09:00-18:00")
         console.print("預設原因：忘刷")
@@ -420,13 +84,15 @@ def run_llm_cli(mode="llm", output_stream=None):
             console.print("[bold]思考中...[/bold]")
             user_prompt = prompt_create(user_message=accumulated_message)
             
-            # 定義 MCP 伺服器連接資訊（以模組方式啟動，支援安裝版與原始碼）
-            travel_helper_cwd = os.path.join(os.path.abspath(os.getcwd()), "travel_helper")
+            # 定義 MCP 伺服器連接資訊
+            tools_dir = os.path.abspath(os.path.join(os.getcwd(), "tools"))
+            travel_helper_cwd = os.path.join(tools_dir, "travel_helper")
+            llm_uploader_path = os.path.join(tools_dir, "llm_uploader.py")
             
             connection_info = {
                 "submit_work_times": {
                     "command": "python",
-                    "args": ["-X", "utf8", "-m", "clockmate.llm_clockmate"],  # 注意要用 utf8 編碼執行
+                    "args": ["-X", "utf8", llm_uploader_path],  # 注意要用 utf8 編碼執行
                     "transport": "stdio",
                 },
                 "google-map": {

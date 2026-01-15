@@ -7,7 +7,7 @@ def read_readme():
     if os.path.exists(readme_path):
         with open(readme_path, 'r', encoding='utf-8') as f:
             return f.read()
-    return "ClockMate - 工時填報助手"
+    return "Pax - 便利工作助手"
 
 # 讀取依賴套件
 def read_requirements():
@@ -18,11 +18,11 @@ def read_requirements():
     return []
 
 setup(
-    name="clockmate",
-    version="1.0.0",
+    name="pax",
+    version="2.0.0",
     author="ClockMate Team",
     author_email="support@clockmate.com",
-    description="工時填報自動化助手",
+    description="便利工作助手",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
     url="https://gitlab-devops.iii.org.tw/iiidevops/p2025-clockmate.git",  # devops URL
@@ -40,10 +40,18 @@ setup(
     entry_points={
         "console_scripts": [
             # 主命令：直接啟動 SSH 服務（封裝於套件內路徑）
+<<<<<<< HEAD
             # "clockmate=clockmate.start_services:start_ssh_server",
             "clockmate=clockmate.cli:main",
             # 取得 Token 的輔助命令（封裝於套件內路徑）
+=======
+            "clockmate=clockmate.start_services:start_ssh_server",
+            # 新別名：Pax
+            "pax=clockmate.start_services:start_ssh_server",
+            # 取得登入相關 Cookie/Token 的指令（與 .env.example 說明一致）
+>>>>>>> 846bd7e4055b50fcda6c22546e512285d30a2bf9
             "clockmate-token=clockmate.get_token:get_tokens_from_browser",
+            "pax-token=clockmate.get_token:get_tokens_from_browser",
         ],
     },
     include_package_data=True,

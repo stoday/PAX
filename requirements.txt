@@ -33,3 +33,4 @@ uvicorn[standard]>=0.24.0
 paramiko==4.0.0
 
 akasha-terminal==0.9.13
+langchain-mcp-adapters==0.1.14

@@ -30,6 +30,7 @@ class SSHShell(paramiko.ServerInterface):
         self.current_path = "C:\\"
         self.channel = None
         self.upload_dir = DEFAULT_UPLOAD_DIR
+        self._exit_requested = False
     
     def check_auth_password(self, username, password):
         """密碼認證"""
@@ -85,54 +86,19 @@ class SSHShell(paramiko.ServerInterface):
                 print(f"發送訊息失敗: {e}")
     
     def run_shell(self):
-        """運行 shell 會話"""
+        """運行 shell 會話：持續自動執行 Pax，直到使用者於 Pax 內輸入 exit/quit。"""
         if not self.channel:
             print("錯誤: channel 未設置")
             return
         try:
-            from .main import run_llm_cli, set_output_stream  # noqa: F401
-
-            # 連線後自動執行 ClockMate（llm 模式）一次
-            try:
-                self.safe_send("\r\n自動啟動 ClockMate (llm 模式)...\r\n")
-                self.run_clockmate('llm')
-            except Exception as auto_err:
-                self.safe_send(f"自動啟動 ClockMate 失敗: {auto_err}\r\n")
-
-            # 進入互動式 shell，提供 clockmate 指令
-            self.safe_send("如需再次執行，輸入 'clockmate'，若要退出輸入'exit'即可")
-            buffer = ""
-            self.send_prompt()
+            # 持續自動執行 Pax（llm 模式）
             while True:
-                try:
-                    data = self.channel.recv(1024)
-                    if not data:
-                        break
-                    text = data.decode('utf-8', errors='ignore')
-                    for char in text:
-                        if char in ['\r', '\n']:
-                            if buffer.strip():
-                                command = buffer.strip()
-                                if command.lower() in ['quit', 'exit']:
-                                    self.show_goodbye()
-                                    return
-                                self.process_command(command)
-                            buffer = ""
-                            self.send_prompt()
-                        elif char == '\x03':  # Ctrl+C
-                            self.channel.send("\n^C\n".encode('utf-8'))
-                            buffer = ""
-                            self.send_prompt()
-                        elif char in ['\x7f', '\x08']:  # Backspace
-                            if buffer:
-                                buffer = buffer[:-1]
-                                self.channel.send("\x08 \x08".encode('utf-8'))
-                        elif char.isprintable():
-                            buffer += char
-                            self.channel.send(char.encode('utf-8'))
-                except Exception as loop_err:
-                    print(f"Shell 迴圈錯誤: {loop_err}")
+                if self.channel is None or self.channel.closed:
                     break
+                cont = self.run_clockmate('llm')
+                if not cont:
+                    # run_clockmate 已執行關閉（若是 exit）
+                    return
         except Exception as e:
             print(f"SSH Shell 會話錯誤: {e}")
         finally:
@@ -213,8 +179,10 @@ class SSHShell(paramiko.ServerInterface):
             self.channel.send(error_text.encode('utf-8'))
 
     def run_clockmate(self, mode: str = 'llm'):
-        """在 SSH channel 中執行 ClockMate CLI，橋接 stdin/stdout。"""
-        from .main import run_llm_cli, set_output_stream, set_io_hooks
+        """在 SSH channel 中執行 Pax CLI，橋接 stdin/stdout。
+        回傳 True 代表完成並可繼續，False 代表使用者要求離開。
+        """
+        from clockmate.main import run_llm_cli, set_output_stream, set_io_hooks
 
         class ChannelWriter:
             def __init__(self, shell_ref):
@@ -238,6 +206,8 @@ class SSHShell(paramiko.ServerInterface):
             def __init__(self, channel):
                 self.channel = channel
                 self.buffer = b""
+                # 使用位元組收集目前行內容，支援 UTF-8
+                self._current_line_bytes = bytearray()
             def _fill(self):
                 if self.channel.closed:
                     return False
@@ -245,17 +215,30 @@ class SSHShell(paramiko.ServerInterface):
                     chunk = self.channel.recv(1)
                     if not chunk:
                         return False
-                    # Echo behavior for better UX
+                    # 安全 echo：僅回顯可見字元與換行，忽略控制字元避免破壞介面
                     try:
-                        ch = chunk
-                        if ch == b"\r":
-                            # Normalize CR to CRLF on echo
+                        b = chunk[0]
+                        if chunk in (b"\r", b"\n"):
+                            # Enter：視覺換行；內容由 readline() 取出
                             self.channel.send(b"\r\n")
-                        elif ch in (b"\x7f", b"\x08"):
-                            # Backspace: erase a char visually
-                            self.channel.send(b"\x08 \x08")
+                        elif b in (0x08, 0x7F):
+                            # Backspace：只在有字元時刪除，不影響既有 UI
+                            if self._current_line_bytes:
+                                # 簡化處理：移除最後一個位元組
+                                # （對多位元組 UTF-8，可能一次刪除半個字元，但實務上可接受）
+                                self._current_line_bytes = self._current_line_bytes[:-1]
+                                self.channel.send(b"\x08 \x08")
+                        elif 32 <= b <= 126:
+                            # 可見 ASCII：追加並顯示
+                            self._current_line_bytes.extend(chunk)
+                            self.channel.send(chunk)
+                        elif b >= 128:
+                            # 非 ASCII（可能為 UTF-8 多位元組）：直接回顯並累積位元組
+                            self._current_line_bytes.extend(chunk)
+                            self.channel.send(chunk)
                         else:
-                            self.channel.send(ch)
+                            # 其他控制碼（如 ESC/方向鍵）忽略
+                            pass
                     except Exception:
                         pass
                     self.buffer += chunk
@@ -270,12 +253,18 @@ class SSHShell(paramiko.ServerInterface):
                     pos_candidates = [p for p in [nl_pos, cr_pos] if p != -1]
                     if pos_candidates:
                         pos = min(pos_candidates)
-                        line += self.buffer[:pos]
+                        # 使用目前行的位元組資料（已處理 Backspace），以 UTF-8 解碼
+                        try:
+                            line_text = self._current_line_bytes.decode('utf-8', errors='ignore')
+                        except Exception:
+                            line_text = ''.join(chr(b) for b in self._current_line_bytes)
                         rest = self.buffer[pos+1:]
                         if rest.startswith(b"\n") or rest.startswith(b"\r"):
                             rest = rest[1:]
                         self.buffer = rest
-                        break
+                        # 清空目前行緩衝
+                        self._current_line_bytes.clear()
+                        return line_text
                     if not self._fill():
                         line += self.buffer
                         self.buffer = b""
@@ -295,6 +284,9 @@ class SSHShell(paramiko.ServerInterface):
                 return out.decode('utf-8', errors='ignore')
             def isatty(self):
                 return True
+
+        class ExitRequested(Exception):
+            pass
 
         # 暫時替換標準 IO
         original_stdin = sys.stdin
@@ -319,10 +311,35 @@ class SSHShell(paramiko.ServerInterface):
                 line = sys.stdin.readline()
                 if line is None:
                     return default_val or ""
-                line = line.rstrip('\r\n')
+                # 正規化：移除零寬度與格式控制字元、替換 NBSP、去除 CR/LF
+                try:
+                    import unicodedata
+                    def _normalize_text(s: str) -> str:
+                        s = s.replace('\r', '').replace('\n', '')
+                        # 將 NBSP 轉成一般空白
+                        s = s.replace('\u00A0', ' ')
+                        # 移除 BOM 與零寬度/格式控制字元
+                        remove_chars = {
+                            '\ufeff',  # BOM / ZWNBSP
+                            '\u200b', '\u200c', '\u200d',  # ZWSP, ZWNJ, ZWJ
+                            '\u2060',  # WORD JOINER
+                            '\u200e', '\u200f',  # LRM, RLM
+                        }
+                        for ch in remove_chars:
+                            s = s.replace(ch, '')
+                        # 移除其餘一般控制/格式字元
+                        s = ''.join(c for c in s if unicodedata.category(c) not in ('Cf', 'Cc'))
+                        return s
+                    line = _normalize_text(line)
+                except Exception:
+                    line = line.rstrip('\r\n')
+                if line.strip().lower() in ("exit", "quit"):
+                    self._exit_requested = True
+                    raise ExitRequested()
                 return line if line != "" else (default_val or "")
             except Exception:
-                return default_val or ""
+                # 若為主動離開，拋例外供上層處理
+                raise
 
         def ssh_confirm(prompt_text: str, default: bool = True) -> bool:
             suffix = " [Y/n]: " if default else " [y/N]: "
@@ -334,22 +351,45 @@ class SSHShell(paramiko.ServerInterface):
                 ans = sys.stdin.readline()
                 if not ans:
                     return default
+                # 正規化輸入同 ssh_input
+                try:
+                    import unicodedata
+                    def _normalize_text(s: str) -> str:
+                        s = s.replace('\r', '').replace('\n', '')
+                        s = s.replace('\u00A0', ' ')
+                        remove_chars = {'\ufeff','\u200b','\u200c','\u200d','\u2060','\u200e','\u200f'}
+                        for ch in remove_chars:
+                            s = s.replace(ch, '')
+                        s = ''.join(c for c in s if unicodedata.category(c) not in ('Cf', 'Cc'))
+                        return s
+                    ans = _normalize_text(ans)
+                except Exception:
+                    ans = ans.strip()
                 ans = ans.strip().lower()
+                if ans in ("exit", "quit"):
+                    self._exit_requested = True
+                    raise ExitRequested()
                 if ans in ("y", "yes"):
                     return True
                 if ans in ("n", "no"):
                     return False
                 return default
             except Exception:
-                return default
+                raise
 
         set_io_hooks(input_func=ssh_input, confirm_func=ssh_confirm)
 
         try:
             run_llm_cli(mode=mode, output_stream=writer)
+            return True
+        except ExitRequested:
+            # 使用者要求離開：直接關閉連線
+            self.show_goodbye()
+            return False
         except Exception as e:
-            self.safe_send(f"ClockMate 執行失敗: {e}")
-            self.safe_send("如需再次執行，輸入 'clockmate'，若要退出輸入'exit'即可")
+            self.safe_send(f"Pax 執行失敗: {e}")
+            # 發生錯誤時，仍允許下一輪重試
+            return True
         finally:
             sys.stdin = original_stdin
             sys.stdout = original_stdout
@@ -360,7 +400,7 @@ class SSHShell(paramiko.ServerInterface):
         goodbye_text = (
             "\r\n=============================\r\n"
             f"再見, {self.username}！\r\n"
-            "感謝使用 SSH 檔案目錄伺服器\r\n"
+            "感謝使用 Pax\r\n"
             "連接即將關閉...\r\n"
             "=============================\r\n\r\n"
         )

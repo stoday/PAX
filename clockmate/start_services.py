@@ -13,7 +13,7 @@ def start_ssh_server():
     print("正在啟動 SSH 服務器 (純文字版)...")
     
     try:
-        from .ssh_server_plain import SSHServer
+        from clockmate.ssh_server_plain import SSHServer
         ssh_server = SSHServer(host="0.0.0.0", port=2222, fastapi_url="http://127.0.0.1:8000")
         ssh_server.start()
     except ImportError as e:

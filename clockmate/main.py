@@ -12,6 +12,7 @@ from rich.table import Table
 from rich import box
 import dotenv
 import os
+<<<<<<< HEAD
 from get_token import get_tokens_from_browser
 
 import akasha
@@ -20,14 +21,31 @@ try:
     from .agent_tools import prompt_create, parse_llm_output
 except:
     from agent_tools import prompt_create, parse_llm_output
+=======
+import sys
+import logging
+import contextlib
+import akasha
+import json_repair
+import subprocess
+>>>>>>> 846bd7e4055b50fcda6c22546e512285d30a2bf9
 
 # 載入環境變數
 dotenv.load_dotenv()
 
+MODEL = "gemini:gemini-2.5-flash"
 BASE_TIMESHEET_URL = "https://hrwt.iii.org.tw/TSM/MyWorkTime.aspx"
 TIMESHEET_ORIGIN = "https://hrwt.iii.org.tw"
 console = Console()
 figlet = Figlet(font="slant")
+# 會話初始化旗標：確保特定初始化只在 SSH 連線期間執行一次
+SESSION_INITIALIZED = False
+stream_process = None
+
+def reset_session_state():
+    """重置會話初始化狀態（供 SSH 連線開始時呼叫）。"""
+    global SESSION_INITIALIZED
+    SESSION_INITIALIZED = False
 
 # 可選的 I/O 掛勾（供 SSH 路徑覆寫互動輸入確認）
 INPUT_FUNC = None  # Callable[[str, object], str]
@@ -41,6 +59,26 @@ def build_timesheet_url(year_month=None):
         return f"{BASE_TIMESHEET_URL}?YM={encoded_ym}"
     return BASE_TIMESHEET_URL
 
+<<<<<<< HEAD
+=======
+def run_mcp_google_map():
+    global stream_process
+
+    if stream_process and stream_process.poll() is None:
+        print("streamable_http already running")
+        return
+    cwd = os.path.join(os.path.abspath(os.getcwd()), "mcp-google-map")
+    stream_process = subprocess.Popen(
+        ["npm", "start"],
+        cwd=cwd,
+        stdout=None,   # 或 None
+        # stdout=subprocess.PIPE,   # 或 None
+        stderr=None,
+        # stderr=subprocess.PIPE,
+        shell=True,               # Windows 一定要
+        env=os.environ.copy()
+    )
+>>>>>>> 846bd7e4055b50fcda6c22546e512285d30a2bf9
 
 def generate_form_data(year_month=None, 
                        default_work_times=None,
@@ -218,11 +256,11 @@ def get_post_headers(year_month=None):
 def display_welcome_banner(plain: bool = False):
     console.print("\r\n")
 
-    ascii_banner = figlet.renderText("ClockMate")
+    ascii_banner = figlet.renderText("Pax")
     panel = Panel.fit(
         ascii_banner.rstrip(),
         border_style="cyan",
-        title="ClockMate 工時小幫手",
+        title="Pax 便利工作助手",
         style="bold magenta",
     )
     console.print(panel)
@@ -231,13 +269,16 @@ def display_welcome_banner(plain: bool = False):
 def prompt_with_default(prompt_text, default_value=None):
     # 若有自訂輸入掛勾，使用簡單文字提示
     if default_value is not None:
-        prompt_plain = f"{prompt_text} 預設值: [{default_value}]: "
+        prompt_plain = f"{prompt_text} 預設值: [{default_value}]:"
     else:
-        prompt_plain = f"{prompt_text}: "
+        prompt_plain = f"{prompt_text}:"
     if INPUT_FUNC:
         try:
             val = INPUT_FUNC(prompt_plain, default_value)
-        except Exception:
+        except Exception as e:
+            # 讓自訂的 ExitRequested 例外傳遞以便 SSH 層捕捉並斷線
+            if e.__class__.__name__ == 'ExitRequested':
+                raise
             val = ""
         return (val or default_value) if default_value is not None else (val or "")
     # 始終使用 Rich 標記以確保渲染樣式
@@ -253,7 +294,9 @@ def prompt_yes_no(prompt_text, default=True):
     if CONFIRM_FUNC:
         try:
             return CONFIRM_FUNC(prompt_text, default)
-        except Exception:
+        except Exception as e:
+            if e.__class__.__name__ == 'ExitRequested':
+                raise
             return default
     return Confirm.ask(f"[bold white]{prompt_text}[/bold white]", default=default)
 
@@ -283,111 +326,119 @@ def set_io_hooks(input_func=None, confirm_func=None):
     INPUT_FUNC = input_func
     CONFIRM_FUNC = confirm_func
 
+<<<<<<< HEAD
+=======
+@contextlib.contextmanager
+def suppress_lib_output():
+    """Temporarily suppress stdout/stderr and lower logging.
+
+    Use to hide noisy prints from third-party libraries without modifying them.
+    """
+    devnull = open(os.devnull, 'w')
+    old_out, old_err = sys.stdout, sys.stderr
+    root_logger = logging.getLogger()
+    old_level = root_logger.level
+    try:
+        sys.stdout = devnull
+        sys.stderr = devnull
+        root_logger.setLevel(logging.CRITICAL)
+        yield
+    finally:
+        root_logger.setLevel(old_level)
+        sys.stdout = old_out
+        sys.stderr = old_err
+        devnull.close()
+
+class LoggerWriter:
+    def __init__(self, logger: logging.Logger, level: int = logging.INFO):
+        self.logger = logger
+        self.level = level
+        self._buf = ""
+
+    def write(self, message: str):
+        if not isinstance(message, str):
+            message = str(message)
+        self._buf += message
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            line = line.rstrip("\r")
+            if line:
+                self.logger.log(self.level, line)
+
+    def flush(self):
+        if self._buf:
+            self.logger.log(self.level, self._buf)
+            self._buf = ""
+
+def get_agent_logger() -> logging.Logger:
+    logger = logging.getLogger("clockmate.agent")
+    logger.setLevel(logging.INFO)
+    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+
+    # Ensure file handler exists
+    has_file = any(isinstance(h, logging.FileHandler) for h in logger.handlers)
+    if not has_file:
+        fh = logging.FileHandler("agent_prints.log", encoding="utf-8")
+        fh.setFormatter(fmt)
+        logger.addHandler(fh)
+
+    # Ensure stream-to-server handler exists (server terminal)
+    has_stream = any(isinstance(h, logging.StreamHandler) and getattr(h, 'stream', None) is getattr(sys, "__stdout__", None) for h in logger.handlers)
+    if not has_stream:
+        server_stdout = getattr(sys, "__stdout__", None)
+        if server_stdout is not None:
+            sh = logging.StreamHandler(server_stdout)
+            sh.setFormatter(fmt)
+            logger.addHandler(sh)
+
+    logger.propagate = False
+    return logger
+
+@contextlib.contextmanager
+def redirect_lib_output_to_logger(logger: logging.Logger):
+    old_out, old_err = sys.stdout, sys.stderr
+    try:
+        sys.stdout = LoggerWriter(logger, logging.INFO)
+        sys.stderr = LoggerWriter(logger, logging.ERROR)
+        yield
+    finally:
+        sys.stdout = old_out
+        sys.stderr = old_err
+>>>>>>> 846bd7e4055b50fcda6c22546e512285d30a2bf9
 
 def run_llm_cli(mode="llm", output_stream=None):
+    from clockmate import prompt_create, parse_llm_output
     # If a custom output stream is provided, rebind console to it
     if output_stream is not None:
         set_output_stream(output_stream)
-    # 顯示 Rich 渲染的 banner
-    display_welcome_banner(plain=False)
-    now = datetime.datetime.now()
-    target_year_month = f"{now.year}/{now.month:02d}"
+    # 首次執行：顯示 banner 並取得 tokens（僅在本次 SSH 連線期間一次）
+    global SESSION_INITIALIZED
+    if not SESSION_INITIALIZED:
+        display_welcome_banner(plain=False)
+        run_mcp_google_map()
+    #     with redirect_lib_output_to_logger(get_agent_logger()):
+        SESSION_INITIALIZED = True
+    accumulated_message = ""
     if mode == "llm":
-        console.print("[bold]mode: 大型語言模型[/bold]")
-        console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值09:00-18:00 原因:忘刷。[/bold]")
-        user_message = prompt_with_default("請輸入工時資料")
-        console.print("[bold]思考中...[/bold]")
-        user_prompt = prompt_create(user_message=user_message)
+        # console.print("[bold]目前模式: 大型語言模型[/bold]")
+        console.print("處理範圍：本月 1 日至今日")
+        console.print("預設時間 09:00-18:00")
+        console.print("預設原因：忘刷")
+        console.print(" - 直接按 [Enter]：將使用預設值")
+        console.print(" - 輸入 'exit'： 退出系統")
+        console.print("[bold]請問我可以為您做什麼呢[/bold]")
 
-        # 定義 MCP 伺服器連接資訊
-        connection_info = {
-            "get_per_day_work_times_by_llm": {
-                "command": "python",
-                "args": ["clockmate\llm_clockmate.py"],
-                "transport": "stdio",
-            },    
-        }
-
-        agent = akasha.agents(
-            model=MODEL,
-            temperature=0.01,
-            verbose=False,
-            max_output_tokens=10000
-        )
-        response = agent.mcp_agent(connection_info, user_prompt)
-        parsed_or_msg = parse_llm_output(response)
-        
-        if isinstance(parsed_or_msg, str):
-            console.print(f"[yellow]I'm sorry, but I cannot assist with that request.{parsed_or_msg}[/yellow]")
-            return
-        else:
-            console.print("[yellow]工時正確生成.[/yellow]")
-
-        final_work_time = parsed_or_msg
-    elif mode == "manual":
-        console.print("[bold]mode: 手動[/bold]")
-        console.print("[bold]請輸入工時資料，直接按 Enter 會使用預設值。[/bold]")
-        target_year_month = prompt_with_default("填寫年月 (YYYY/MM)", target_year_month)
-        arrival_time = prompt_with_default("預設上班時間 (HH:MM)", "09:00")
-        leave_time = prompt_with_default("預設下班時間 (HH:MM)", "18:00")
-        reason = prompt_with_default("預設原因", "忘刷")
-        remark = prompt_with_default("預設備註 (可留空)", "").strip()
-
-        custom_work_times = {
-            'arrival_time': arrival_time,
-            'leave_time': leave_time,
-            'reason': reason,
-            'remark': remark
-        }
-
-        summary_table = Table(show_header=False, box=box.SIMPLE_HEAVY)
-        summary_table.add_row("✨ 年月", target_year_month)
-        summary_table.add_row("⏰ 上班/下班", f"{arrival_time} - {leave_time}")
-        summary_table.add_row("📝 原因", reason)
-        summary_table.add_row("💬 備註", remark or "（無）")
-
-        console.rule("[bold cyan]設定摘要[/bold cyan]")
-        console.print(summary_table)
-
-        final_work_time = custom_work_times
-
-    if not prompt_yes_no("是否繼續並生成表單資料？", True):
-        console.print("[yellow]已取消操作。[/yellow]")
-        return
-    
-    get_tokens_from_browser()
-
-    form_data, session = get_fresh_form_llm_data(target_year_month, final_work_time, mode=mode)
-    if not form_data:
-        console.print("[bold red]無法生成表單資料，請稍後再試。[/bold red]")
-        return
-
-    console.rule("[bold green]表單資料已完成建立[/bold green]")
-    # if fetch_hidden and session:
-    if session:
-        if prompt_yes_no("需要立即提交表單嗎？", True):
-            console.rule("[bold magenta]提交表單[/bold magenta]")
-            console.print("📝 正在提交表單...")
-            post_headers = get_post_headers(target_year_month)
-            console.print(f"[dim]📋 使用 headers: {list(post_headers.keys())}[/dim]")
-
-            submit_url = build_timesheet_url(target_year_month)
-            response = session.post(submit_url, data=form_data, headers=post_headers, allow_redirects=False)
-
-            console.print(f"[bold green]✅ 提交完成！狀態碼: {response.status_code}[/bold green]")
-
-            if response.status_code == 302:
-                location = response.headers.get('Location', '未知')
-                console.print(f"[cyan]🔄 重定向到: {location}[/cyan]")
-
-                if 'Default.aspx' not in location:
-                    console.print("[bold green]🎉 表單提交可能成功！[/bold green]")
-                else:
-                    console.print("[bold red]❌ 被重定向到登入頁面，可能需要重新認證[/bold red]")
-            elif response.status_code == 200:
-                console.print("[cyan]📄 收到回應內容:[/cyan]")
-                console.print(response.text[:300] + "..." if len(response.text) > 300 else response.text)
+        # 迴圈：若 LLM 回覆
+        accumulated_message = ""
+        while True:
+            # 首次或累積後的訊息提示
+            user_message = prompt_with_default(">")
+            
+            # 將使用者輸入累積成單一訊息（保留上下文）
+            if accumulated_message:
+                accumulated_message = f"{user_message}\n{accumulated_message}".strip()
             else:
+<<<<<<< HEAD
                 console.print(f"[yellow]❓ 未預期的狀態碼: {response.status_code}[/yellow]")
                 console.print(f"[yellow]回應內容: {response.text[:200]}[/yellow]")
 
@@ -508,123 +559,48 @@ def generate_form_llm_data(year_month=None,
                 'leave_time': '18:00',      # 預設下班時間
                 'reason': '忘刷',           # 預設原因
                 'remark': ''                # 預設備註
+=======
+                accumulated_message = user_message.strip()
+
+            console.print("[bold]思考中...[/bold]")
+            user_prompt = prompt_create(user_message=accumulated_message)
+            
+            # 定義 MCP 伺服器連接資訊（以模組方式啟動，支援安裝版與原始碼）
+            travel_helper_cwd = os.path.join(os.path.abspath(os.getcwd()), "travel_helper")
+            
+            connection_info = {
+                "submit_work_times": {
+                    "command": "python",
+                    "args": ["-X", "utf8", "-m", "clockmate.llm_clockmate"],  # 注意要用 utf8 編碼執行
+                    "transport": "stdio",
+                },
+                "google-map": {
+                    "url": "http://localhost:3000/mcp",
+                    "transport": "streamable_http",
+                },
+                "fare_estimator": {
+                    "command": "python",
+                    "args": [f"{travel_helper_cwd}\\fare_estimator.py"],
+                    "transport": "stdio",
+                },
+                "dc_apply": {
+                    "command": "python",
+                    "args": [f"{travel_helper_cwd}\\apply.py"],
+                    "transport": "stdio",
+                }
+>>>>>>> 846bd7e4055b50fcda6c22546e512285d30a2bf9
             }
-    
-    Returns:
-        dict: 完整的表單資料
-    """
-    # 如果沒有提供年月，使用當前年月
-    if year_month is None:
-        now = datetime.datetime.now()
-        year_month = f"{now.year}/{now.month:02d}"
-    
-    # 預設工作時間設定
-    if default_work_times is None:
-        default_work_times = {
-            'arrival_time': '09:00',
-            'leave_time': '18:00', 
-            'reason': '忘刷',
-            'remark': ''
-        }
-    
-    # 解析年月
-    try:
-        year, month = year_month.split('/')
-        year = int(year)
-        month = int(month)
-    except ValueError:
-        raise ValueError("年月格式錯誤，請使用 'YYYY/MM' 格式，例如 '2025/10'")
-    
-    # 基本表單資料（隱藏欄位會在後續動態更新）
-    form_data = {
-        "__EVENTTARGET": "ctl00$ContentPlaceHolder1$btnEdit",
-        "__EVENTARGUMENT": "",
-        "__VIEWSTATE": "<GET_FROM_BROWSER>",
-        "__VIEWSTATEGENERATOR": "<GET_FROM_BROWSER>",
-        "__EVENTVALIDATION": "<GET_FROM_BROWSER>",
-        "ctl00$ContentPlaceHolder1$txb_StDay": year_month,
-    }
-    
-    # 取得該月的天數
-    days_in_month = calendar.monthrange(year, month)[1]
-    if until_date is None or until_date > days_in_month:
-        until_date = days_in_month
-
-    # 生成每一天的表單欄位
-    work_days = []  # 記錄工作日
-    holidays = []   # 記錄假日
-
-    # 判斷是否為「逐日設定」：若提供之 dict 並非單純 arrival/leave/reason/remark 四鍵，
-    # 則視為 {date: {arrival_time, leave_time, reason, remark}, ...}
-
-    for day in range(1, (until_date) + 1):
-        date_str = f"{year}{month:02d}{day:02d}"  # 格式: 20251001
-        
-        # 判斷是否為工作日 (週一到週五)
-        date_obj = datetime.date(year, month, day)
-        is_workday = date_obj.weekday() < 5  # 0-4 是週一到週五
-        
-        if mode =="llm":
-            # 支援多種日期鍵格式：YYYYMMDD / YYYY-MM-DD / YYYY/MM/DD / MM-DD
-            d_keys = [
-                f"{year}{month:02d}{day:02d}",
-                f"{year}-{month:02d}-{day:02d}",
-                f"{year}/{month:02d}/{day:02d}",
-                f"{month:02d}-{day:02d}",
-            ]
-            day_cfg = None
-            for k in d_keys:
-                if k in default_work_times:
-                    day_cfg = default_work_times[k]
-                    break
-
-            if isinstance(day_cfg, dict):
-                arr = day_cfg.get('arrival_time', '')
-                lev = day_cfg.get('leave_time', '')
-                rea = day_cfg.get('reason', '')
-                rem = day_cfg.get('remark', '')
-            else:
-                arr = lev = rea = rem = ''
-
-            form_data[f"ctl00$ContentPlaceHolder1$txtArr_{date_str}"] = arr
-            form_data[f"ctl00$ContentPlaceHolder1$txtLev_{date_str}"] = lev
-            form_data[f"ctl00$ContentPlaceHolder1$Dp_{date_str}"] = rea
-            form_data[f"ctl00$ContentPlaceHolder1$txtR_{date_str}"] = rem
-
-            # 工作日/假日清單仍依平日定義
-            if is_workday:
-                work_days.append(date_str)
-            else:
-                holidays.append(date_str)
-        else:
-            if is_workday:
-                # 工作日：填入預設時間
-                form_data[f"ctl00$ContentPlaceHolder1$txtArr_{date_str}"] = default_work_times['arrival_time']
-                form_data[f"ctl00$ContentPlaceHolder1$txtLev_{date_str}"] = default_work_times['leave_time']
-                form_data[f"ctl00$ContentPlaceHolder1$Dp_{date_str}"] = default_work_times['reason']
-                form_data[f"ctl00$ContentPlaceHolder1$txtR_{date_str}"] = default_work_times['remark']
-                work_days.append(date_str)
-            else:
-                # 假日：空白
-                form_data[f"ctl00$ContentPlaceHolder1$txtArr_{date_str}"] = ""
-                form_data[f"ctl00$ContentPlaceHolder1$txtLev_{date_str}"] = ""
-                form_data[f"ctl00$ContentPlaceHolder1$Dp_{date_str}"] = ""
-                form_data[f"ctl00$ContentPlaceHolder1$txtR_{date_str}"] = ""
-                holidays.append(date_str)
-    
-    # 添加隱藏的控制欄位（根據你原本的資料格式）
-    form_data["ctl00$ContentPlaceHolder1$HidWkHCtrl"] = ";".join(holidays)
-    form_data["ctl00$ContentPlaceHolder1$HidWkACtrl"] = ";".join(work_days)
-    form_data["ctl00$ContentPlaceHolder1$HideStTimes"] = ""
-    form_data["ctl00$ContentPlaceHolder1$HidEdTimes"] = ""
-    
-    console.print(f"[bold green]📅 生成 {year_month} 的表單資料[/bold green]")
-    console.print(f"[cyan]📊 工作日: {len(work_days)} 天[/cyan]")
-    console.print(f"[cyan]🏖️ 假日: {len(holidays)} 天[/cyan]")
-    console.print(f"[magenta]⏰ 預設上班時間: {default_work_times['arrival_time']}[/magenta]")
-    console.print(f"[magenta]⏰ 預設下班時間: {default_work_times['leave_time']}[/magenta]")
-    
-    return form_data
+            
+            agent = akasha.agents(
+                model=MODEL,
+                temperature=0.01,
+                verbose=True,
+                max_input_tokens=50000,
+                max_output_tokens=50000
+            )
+            
+            response = agent.mcp_agent(connection_info, user_prompt)
+            console.print(response)
 
 
 if __name__ == "__main__":

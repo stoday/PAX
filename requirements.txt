@@ -29,8 +29,12 @@ webdriver-manager>=3.8.0
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 
+<<<<<<< HEAD
 # SSH 服務器相關依賴
 paramiko==4.0.0
 
 akasha-terminal==0.9.13
+=======
+akasha-terminal==0.9.14
+>>>>>>> 49a90364ce94a497bdc0bba9b9db792b53d5b8d9
 langchain-mcp-adapters==0.1.14

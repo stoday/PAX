@@ -1,6 +1,6 @@
 # Pax 便利工作助手
 
-自動化工作助手（原名 ClockMate）
+自動化工作助手
 
 ## 環境需求
 - Python 3.10 以上
@@ -10,19 +10,17 @@
 
 ```bash
 git init
-git pull https://github.com/stoday/CLOCKMATE.git ssh
+git pull https://github.com/stoday/PAX.git travel-helper
 pip install -e .
 # 或是
-pip install git+https://github.com/stoday/CLOCKMATE.git@ssh
+pip install git+https://github.com/stoday/PAX.git@travel-helper
 ```
 
 ## 使用方法
 
-### 1. Server端
+### 1. 設置 API Key
 
-#### 1. 設置API_KEY
-
-在專案位置新增 `.env` ，包含
+在專案根目錄新增 `.env` ，包含：
 
 ```
 # 必要
@@ -37,64 +35,17 @@ CLIENT_USERNAME={your client username}
 TEL_BEARER_TOKEN={your bearer token}
 TEL_COOKIE_TOKEN={your cookie token}
 ```
-
-#### 2. 啟用服務
-```bash
-pax
-# 或使用舊指令相容方式
-clockmate
-```
    - 會自動開啟瀏覽器，依指示登入 hrwt；完成後程式會將 `ASP_NET_SESSION_ID`、`CLIENT_TICKET`、`CLIENT_USERNAME` 寫入專案根目錄的 `.env`。
    - 若需要呼叫 LLM 服務，可在 `.env` 內自行加入 `API KEY`。例如: 想要使用 `Gemini` 模型，加入變數 `GEMINI_API_KEY=xxxxx`
 3) （選用）若要固定 log 路徑，可將 `CLOCKMATE_LOG_PATH` 指到想要的檔案；預設寫在 `clockmate/logs/access_hr_web_tool_YYYYMMDD.log`。
 
-### 2. 使用者(Windows)
+### 2. 啟動流程（本機終端）
 
-#### 1.確認ssh server已開啟後進行連線
 ```bash
-python -m clockmate.get_token     # 或使用 console script: clockmate-token
+python -m app.main
 ```
 
-##### 1.1.系統訊息
-如果是第一次連線，系統會彈出以下訊息:
-```
-Are you sure you want to continue connecting (yes/no/[fingerprint])?
-```
-輸入 `yes` 即可
-
-##### 1.2.ssh連線問題
-如果彈出以下訊息
-```
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
-Someone could be eavesdropping on you right now (man-in-the-middle attack)!
-It is also possible that a host key has just been changed.
-The fingerprint for the RSA key sent by the remote host is
-SHA256:pHJ/nJNs4mzYo/txygFSi7seRAyYFi3GnEdDQJj6Hxk.
-Please contact your system administrator.
-Add correct host key in C:\\Users\\User/.ssh/known_hosts to get rid of this message.
-Offending RSA key in C:\\Users\\User/.ssh/known_hosts:6
-Host key for [127.0.0.1]:2222 has changed and you have requested strict checking.
-Host key verification failed.
-```
-只需輸入以下指令後再次嘗試連線即可
-```bash
-ssh-keygen -R "[127.0.0.1]:2222"
-ssh admin@127.0.0.1 -p 2222
-yes
-```
-
-#### 2.輸入密碼
-```bash
-# pip 安裝後
-clockmate
-# 若是從原始碼直接執行（請先依上方「clone 安裝」步驟取得原始碼）
-python clockmate/cli.py
-```
-
-#### 成功登入後即可看到 Pax 介面
+啟動後即可看到 Pax 介面：
 
 ```
 ╭── Pax 便利工作助手 ──╮
@@ -111,6 +62,29 @@ python clockmate/cli.py
  - 輸入 'exit'： 退出系統
 請輸入工時資料
 >:
+```
+
+### 3. 結束應用
+
+在首頁輸入 `exit` 即可退出。
+
+## 專案結構
+
+```
+app/
+	main.py            # CLI 入口（本機終端啟動）
+	llm_prompt.py      # LLM Prompt 組裝與規則
+	get_token.py       # 取得登入 Cookie
+	__init__.py        # 對外匯出
+
+tools/
+	llm_uploader.py    # 工時提交（MCP 工具與提交流程）
+	mcp-google-map/    # Google Map MCP 服務
+	travel_helper/     # 出差單相關工具
+README.md            # 專案說明
+requirements.txt     # Python 依賴
+pyproject.toml       # 專案設定
+setup.py             # 套件設定
 ```
 
 ## 使用範例

@@ -20,12 +20,17 @@ def read_requirements():
 setup(
     name="pax",
     version="2.0.0",
+<<<<<<< HEAD
     author="ClockMate Team",
     author_email="support@clockmate.com",
+=======
+    author="PAX Team",
+    author_email="tsaiyuforwork@gmail.com",
+>>>>>>> 49a90364ce94a497bdc0bba9b9db792b53d5b8d9
     description="便利工作助手",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
-    url="https://gitlab-devops.iii.org.tw/iiidevops/p2025-clockmate.git",  # devops URL
+    url="https://github.com/stoday/PAX.git",  # devops URL
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -39,6 +44,7 @@ setup(
     install_requires=read_requirements(),
     entry_points={
         "console_scripts": [
+<<<<<<< HEAD
             # 主命令：直接啟動 SSH 服務（封裝於套件內路徑）
 <<<<<<< HEAD
             # "clockmate=clockmate.start_services:start_ssh_server",
@@ -52,10 +58,14 @@ setup(
 >>>>>>> 846bd7e4055b50fcda6c22546e512285d30a2bf9
             "clockmate-token=clockmate.get_token:get_tokens_from_browser",
             "pax-token=clockmate.get_token:get_tokens_from_browser",
+=======
+            # 取得登入相關 Cookie/Token 的指令（與 .env.example 說明一致）
+            "pax-token=app.get_token:get_tokens_from_browser",
+>>>>>>> 49a90364ce94a497bdc0bba9b9db792b53d5b8d9
         ],
     },
     include_package_data=True,
     package_data={
-        "clockmate": ["*.txt", "*.md"],
+        "app": ["*.txt", "*.md"],
     },
 )

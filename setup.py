@@ -20,12 +20,12 @@ def read_requirements():
 setup(
     name="pax",
     version="2.0.0",
-    author="ClockMate Team",
-    author_email="support@clockmate.com",
+    author="PAX Team",
+    author_email="tsaiyuforwork@gmail.com",
     description="便利工作助手",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
-    url="https://gitlab-devops.iii.org.tw/iiidevops/p2025-clockmate.git",  # devops URL
+    url="https://github.com/stoday/PAX.git",  # devops URL
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -40,12 +40,11 @@ setup(
     entry_points={
         "console_scripts": [
             # 取得登入相關 Cookie/Token 的指令（與 .env.example 說明一致）
-            "clockmate-token=clockmate.get_token:get_tokens_from_browser",
-            "pax-token=clockmate.get_token:get_tokens_from_browser",
+            "pax-token=app.get_token:get_tokens_from_browser",
         ],
     },
     include_package_data=True,
     package_data={
-        "clockmate": ["*.txt", "*.md"],
+        "app": ["*.txt", "*.md"],
     },
 )

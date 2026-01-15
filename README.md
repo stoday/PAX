@@ -1,15 +1,15 @@
 # Pax 便利工作助手
 
-自動化工作助手（原名 ClockMate）
+自動化工作助手
 
 ## 安裝
 
 ```bash
 git init
-git pull https://github.com/stoday/CLOCKMATE.git ssh
+git pull https://github.com/stoday/PAX.git travel-helper
 pip install -e .
 # 或是
-pip install git+https://github.com/stoday/CLOCKMATE.git@ssh
+pip install git+https://github.com/stoday/PAX.git@travel-helper
 ```
 
 ## 使用方法
@@ -35,7 +35,7 @@ TEL_COOKIE_TOKEN={your cookie token}
 ### 2. 啟動流程（本機終端）
 
 ```bash
-python -m clockmate.main
+python -m app.main
 ```
 
 啟動後即可看到 Pax 介面：
@@ -64,9 +64,8 @@ python -m clockmate.main
 ## 專案結構
 
 ```
-clockmate/
+app/
 	main.py            # CLI 入口（本機終端啟動）
-	llm_uploader.py    # 工時提交（MCP 工具與提交流程）
 	llm_prompt.py      # LLM Prompt 組裝與規則
 	get_token.py       # 取得登入 Cookie
 	__init__.py        # 對外匯出

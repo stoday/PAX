@@ -22,4 +22,4 @@ Pax - 便利工作助手
 
 __version__ = "1.0.0"
 __author__ = "Pax Team"
-__email__ = "support@clockmate.com"
+__email__ = "tsaiyuforwork@gmail.com"

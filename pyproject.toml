@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [
-    {name = "ClockMate Team", email = "support@clockmate.com"},
+    {name = "PAX Team", email = "tsaiyuforwork@gmail.com"},
 ]
 keywords = ["timesheet", "automation", "hr"]
 classifiers = [
@@ -37,10 +37,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://gitlab.com/your-username/clockmate"
-Repository = "https://gitlab.com/your-username/clockmate.git"
-Issues = "https://gitlab.com/your-username/clockmate/-/issues"
+Homepage = "https://github.com/stoday/PAX"
+Repository = "https://github.com/stoday/PAX.git"
+Issues = "https://github.com/stoday/PAX/issues"
 
 [project.scripts]
-clockmate-token = "clockmate.get_token:get_tokens_from_browser"
-pax-token = "clockmate.get_token:get_tokens_from_browser"
+pax-token = "app.get_token:get_tokens_from_browser"

@@ -56,7 +56,7 @@ def prompt_with_default(prompt_text, default_value=None):
     return user_input or (default_value if default_value is not None else "")
 
 def run_llm_cli(mode="llm"):
-    from clockmate import prompt_create
+    from app import prompt_create
     # 顯示 banner 並啟動必要服務
     run_mcp_google_map()
     display_welcome_banner(plain=False)

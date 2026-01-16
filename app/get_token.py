@@ -73,7 +73,7 @@ def wait_for_login(driver: webdriver.Chrome) -> None:
     """Give the user time to log in and wait until the app shell loads."""
     driver.get(LOGIN_URL)
     print(f"已開啟登入頁面：{LOGIN_URL}")
-    print("若環境變數 `EIP_USER`/`EIP_PASS` 或 `TRAVEL_EIP_USER`/`TRAVEL_EIP_PASS` 已設定，程式會嘗試自動登入；否則請手動輸入帳號密碼後按 Enter 繼續。")
+    # print("若環境變數 `EIP_USER`/`EIP_PASS` 或 `TRAVEL_EIP_USER`/`TRAVEL_EIP_PASS` 已設定，程式會嘗試自動登入；否則請手動輸入帳號密碼後按 Enter 繼續。")
     # Allow caller to perform auto login by returning to caller; we will
     # attempt auto-login from the main flow if credentials are available.
     input("按下 Enter 後開始跳轉到下一個頁面...")
@@ -130,7 +130,7 @@ def get_tokens_from_browser() -> None:
                 password = __import__("os").getenv(p_key)
 
         if username and password:
-            # perform auto login using same targets as travelmate script
+            # perform auto login
             print("偵測到帳密，嘗試自動填入並登入...")
             try:
                 # reuse a small auto-login helper defined below

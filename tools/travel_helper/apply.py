@@ -498,6 +498,27 @@ def dc_apply(InWorkRoute):
                 "PROJID_NAME": r.get("PROJID_NAME", "")
             })
 
+    # 追加雜費項目（放在 ApplyItem 最後），沿用前一筆的 ACTYEAR/PROJID/PROJID_NAME
+    last_item = apply_items[-1] if apply_items else {}
+    apply_items.append({
+        "NUMBER": len(apply_items) + 1,
+        "SOURCE": "A",
+        "UUID": "",
+        "FORMID": "",
+        "ORD": 0,
+        "ITEM_NAME": "雜費",
+        "DESC1": "每日上限為 400 元",
+        "REASON": None,
+        "ACTNAME": "旅運費",
+        "ACTYEAR": last_item.get("ACTYEAR", ""),
+        "PROJID": last_item.get("PROJID", ""),
+        "PROJID_NAME": last_item.get("PROJID_NAME", "                                                        "),
+        "ESTPRICE": 400,
+        "ESTPRICE_FMT": "400",
+        "VALID_FLAG": None,
+        "UD_ADD": None
+    })
+
     payload = {
         # ---- 系統狀態 ----
         "AppData": {

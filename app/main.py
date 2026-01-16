@@ -60,13 +60,15 @@ def run_llm_cli(mode="llm"):
     # 顯示 banner 並啟動必要服務
     run_mcp_google_map()
     display_welcome_banner(plain=False)
+    console.print("[bold cyan]使用教學[/bold cyan]")
+    console.print("• 直接描述需求，例如：『補刷 1/3 09:00-18:00，原因：忘刷』")
+    console.print("• 直接按 Enter：套用預設值")
+    console.print("• 輸入 'exit'：結束程式")
+    console.print("[bold cyan]出差單教學[/bold cyan]")
+    console.print("• 輸入：『建立出差單』或直接描述出差日期、地點、交通方式與費用")
+    console.print("• 系統會自動彙整路線與費用，並預設帶入最後一筆專案編號")
     accumulated_message = ""
     if mode == "llm":
-        console.print("處理範圍：本月 1 日至今日")
-        console.print("預設時間 09:00-18:00")
-        console.print("預設原因：忘刷")
-        console.print(" - 直接按 [Enter]：將使用預設值")
-        console.print(" - 輸入 'exit'： 退出系統")
         console.print("[bold]請問我可以為您做什麼呢[/bold]")
 
         # 迴圈：若 LLM 回覆

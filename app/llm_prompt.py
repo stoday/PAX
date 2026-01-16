@@ -47,12 +47,13 @@ arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark="" 來產�
 完成工時生成後，使用tool submit_work_times將工時資料提交到系統中。
 """ + """
 # 出差單填寫規則:
-    1.預設使用大眾交通工具規劃路線(maps_directions)
-    2.當規畫中有需要搭乘公車的部分，將起始點與終點設為開車進行距離與時間測量，若搭乘公車前後有步行規劃，連同步行行程也納入開車計算
-    3.若有改為開車，則使用計程車價格(taxi_fare_estimator)計算費用
-    4.通過tools精確抓取大眾交通工具(高鐵(thsr_fare_estimator)、台鐵(tr_fare_estimator))的花費
-    5.根據以上資料進行填寫出差單的InWorkRoute欄位，並回傳符合格式List
-    6.若有多段路程，請將每段步行以外的路程以[{"NUMBER":1,...}, {"NUMBER":2,...}]的形式回傳
+    1.至少需要時間、出差地點資訊才能進行出差單填寫，若使用者提供的資訊不足，請先詢問需要補充的資訊。
+    2.預設使用大眾交通工具規劃路線(maps_directions)，預設由民生科技服務大樓出發，若使用者有指定起始點，請以使用者指定的地點為主
+    3.當規畫中有需要搭乘公車的部分，將起始點與終點設為開車進行距離與時間測量，若搭乘公車前後有步行規劃，連同步行行程也納入開車計算
+    4.若有改為開車，則使用計程車價格(taxi_fare_estimator)計算費用
+    5.通過tools精確抓取大眾交通工具(高鐵(thsr_fare_estimator)、台鐵(tr_fare_estimator))的花費
+    6.根據以上資料進行填寫出差單的InWorkRoute欄位，並回傳符合格式List
+    7.若有多段路程，請將每段步行以外的路程以[{"NUMBER":1,...}, {"NUMBER":2,...}]的形式回傳
     "InWorkRoute": [
         {
             "NUMBER": 1,
@@ -76,7 +77,7 @@ arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark="" 來產�
             "UD_ADD": "Y",
         }
     ],
-    7. 產生完以上list後，使用tool dc_apply將出差單資料提交到系統中。
+    8. 產生完以上list後，使用tool dc_apply將出差單資料提交到系統中。
 """ + f"""
 # 使用者訊息:
 {user_message}

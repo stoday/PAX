@@ -12,23 +12,18 @@ from rich.table import Table
 from rich import box
 import dotenv
 import os
-<<<<<<< HEAD
-from get_token import get_tokens_from_browser
 
-import akasha
 MODEL = "gemini:gemini-2.5-flash"
 try:
     from .agent_tools import prompt_create, parse_llm_output
 except:
     from agent_tools import prompt_create, parse_llm_output
-=======
+
 import sys
 import logging
 import contextlib
 import akasha
-import json_repair
 import subprocess
->>>>>>> 846bd7e4055b50fcda6c22546e512285d30a2bf9
 
 # 載入環境變數
 dotenv.load_dotenv()
@@ -59,8 +54,7 @@ def build_timesheet_url(year_month=None):
         return f"{BASE_TIMESHEET_URL}?YM={encoded_ym}"
     return BASE_TIMESHEET_URL
 
-<<<<<<< HEAD
-=======
+
 def run_mcp_google_map():
     global stream_process
 
@@ -78,7 +72,6 @@ def run_mcp_google_map():
         shell=True,               # Windows 一定要
         env=os.environ.copy()
     )
->>>>>>> 846bd7e4055b50fcda6c22546e512285d30a2bf9
 
 def generate_form_data(year_month=None, 
                        default_work_times=None,
@@ -326,8 +319,6 @@ def set_io_hooks(input_func=None, confirm_func=None):
     INPUT_FUNC = input_func
     CONFIRM_FUNC = confirm_func
 
-<<<<<<< HEAD
-=======
 @contextlib.contextmanager
 def suppress_lib_output():
     """Temporarily suppress stdout/stderr and lower logging.
@@ -404,7 +395,6 @@ def redirect_lib_output_to_logger(logger: logging.Logger):
     finally:
         sys.stdout = old_out
         sys.stderr = old_err
->>>>>>> 846bd7e4055b50fcda6c22546e512285d30a2bf9
 
 def run_llm_cli(mode="llm", output_stream=None):
     from clockmate import prompt_create, parse_llm_output
@@ -416,7 +406,6 @@ def run_llm_cli(mode="llm", output_stream=None):
     if not SESSION_INITIALIZED:
         display_welcome_banner(plain=False)
         run_mcp_google_map()
-    #     with redirect_lib_output_to_logger(get_agent_logger()):
         SESSION_INITIALIZED = True
     accumulated_message = ""
     if mode == "llm":

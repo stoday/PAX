@@ -1,9 +1,16 @@
-# -*- coding: utf-8 -*-
-"""
-Pax 主程式 - 支援本地與雲端模式切換
-"""
-
 import os
+import sys
+
+# --- 專案路徑初始化 ---
+# 取得目前腳本所在的目錄 (app/)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# 取得專案根目錄 (app/ 的上一層)
+base_dir = os.path.dirname(current_dir)
+# 將根目錄加入 sys.path，確保可以找到 core, runtime 等套件
+if base_dir not in sys.path:
+    sys.path.insert(0, base_dir)
+# ---------------------
+
 import dotenv
 from pyfiglet import Figlet
 from rich.console import Console

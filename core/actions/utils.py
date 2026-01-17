@@ -29,7 +29,18 @@ def get_dynamic_user_agent():
 
 def get_auth_cookies() -> Dict[str, str]:
     import dotenv
-    dotenv.load_dotenv(override=True) # 強制覆蓋現有環境變數
+    import sys
+    
+    # 智慧路徑判斷：如果是打包後的 .exe，就讀取執行檔當前目錄
+    if getattr(sys, 'frozen', False):
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        # 開發環境下，從 core/actions/utils.py 往上三層回到根目錄
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    
+    env_path = os.path.join(base_dir, ".env")
+    dotenv.load_dotenv(env_path, override=True)
+    
     return {
         'ASP.NET_SessionId': os.getenv("ASP_NET_SESSION_ID", ""),
         'clientTicket': os.getenv("CLIENT_TICKET", ""),

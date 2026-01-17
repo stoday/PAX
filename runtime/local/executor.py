@@ -55,17 +55,39 @@ class LocalRuntime(RuntimeAdapter):
             # 啟動服務（在背景執行）
             CREATE_NEW_CONSOLE = subprocess.CREATE_NEW_CONSOLE if hasattr(subprocess, "CREATE_NEW_CONSOLE") else 0x00000010
             
-            self.mcp_process = subprocess.Popen(
-                ["npm", "start"],
-                cwd=mcp_dir,
-                env=os.environ.copy(),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                shell=True,  # Windows 執行 npm 必要參數
-                creationflags=CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0
-            )
+            # 決定 node 指令：優先使用可攜式環境內的 node.exe
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            portable_node = os.path.join(base_dir, "runtime", "node", "node.exe")
             
-            print("[LocalRuntime] Google Map MCP 服務已啟動")
+            try:
+                if os.path.exists(portable_node):
+                    log_msg = f"[LocalRuntime] 使用可攜式 Node: {portable_node}"
+                    index_js = os.path.join(mcp_dir, "dist", "index.js")
+                    # 如果 dist/index.js 不存在，嘗試直接 npm start
+                    if os.path.exists(index_js):
+                        cmd = [portable_node, index_js]
+                        shell_mode = False
+                    else:
+                        cmd = ["npm.cmd", "start"] # 假設在 PATH 中
+                        shell_mode = True
+                else:
+                    # 一般開發環境
+                    cmd = ["npm", "start"]
+                    shell_mode = True
+
+                self.mcp_process = subprocess.Popen(
+                    cmd,
+                    cwd=mcp_dir,
+                    env=os.environ.copy(),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    shell=shell_mode,
+                    creationflags=CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0
+                )
+                print("[LocalRuntime] Google Map MCP 服務已啟動")
+                
+            except Exception as e:
+                print(f"[LocalRuntime] 警告：無法啟動 Google Map MCP 服務: {e}")
             
         except Exception as e:
             print(f"[LocalRuntime] 警告：無法啟動 Google Map MCP 服務: {e}")

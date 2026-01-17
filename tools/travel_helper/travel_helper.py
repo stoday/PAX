@@ -85,8 +85,8 @@ connection_info = {
 agent = akasha.agents(
     model=MODEL,
     temperature=0.3,
-    verbose=True,
-    keep_logs=True,
+    verbose=False,
+    keep_logs=False,
     max_input_tokens=20000,
     max_output_tokens=20000
 )

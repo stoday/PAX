@@ -29,5 +29,7 @@ webdriver-manager>=3.8.0
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 
-akasha-terminal==0.9.14
+akasha-terminal[light] @ git+https://github.com/iii-org/akasha.git@light-version
 langchain-mcp-adapters==0.1.14
+pystray==0.19.5
+Pillow>=10.0.0

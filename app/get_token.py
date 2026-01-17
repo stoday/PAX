@@ -16,7 +16,11 @@ LOGIN_URL = "https://eip.iii.org.tw/"
 # LOGIN_URL = "https://hrwt.iii.org.tw"
 SECOND_URL = "https://hrwt.iii.org.tw"
 
-ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+if getattr(sys, 'frozen', False):
+    ENV_PATH = Path(os.path.dirname(sys.executable)) / ".env"
+else:
+    ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+
 COOKIE_NAMES = {
     "TEL_COOKIE_TOKEN": "token",
     "ASP_NET_SESSION_ID": "ASP.NET_SessionId",

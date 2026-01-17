@@ -28,8 +28,12 @@ class TrayRunner:
         self.worker_thread = None
         self.lock_port = 49152
         
-        # 取得專案根目錄
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if getattr(sys, 'frozen', False):
+            # 打包後的環境：base_dir 是執行檔所在目錄
+            self.base_dir = os.path.dirname(sys.executable)
+        else:
+            # 開發環境：base_dir 是專案根目錄
+            self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         
         # 載入持久化設定
         self.config_path = os.path.join(self.base_dir, "pax_config.json")
@@ -65,6 +69,40 @@ class TrayRunner:
                 f.write(f"[{time.ctime()}] [{self.mode.upper()}] {msg}\n")
         except Exception as e:
             print(f"無法寫入日誌: {e}")
+
+    def _notify(self, title, message):
+        """顯示系統通知"""
+        try:
+            if self.icon:
+                self.icon.notify(message, title=title)
+            else:
+                print(f"[{title}] {message}")
+        except Exception as e:
+            self.debug_log(f"無法顯示通知: {e}")
+
+    def _open_console(self):
+        """開啟 Pax AI 控制台視窗"""
+        try:
+            if getattr(sys, 'frozen', False):
+                # 打包模式：呼叫自己並帶上 --console 參數
+                # 使用 CREATE_NEW_CONSOLE 旗標來彈出新的 CMD 視窗
+                subprocess.Popen(
+                    [sys.executable, "--console"],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                    cwd=self.base_dir
+                )
+            else:
+                # 開發模式
+                main_py = os.path.join(self.base_dir, "app", "main.py")
+                subprocess.Popen(
+                    ["cmd.exe", "/c", "start", "python", main_py],
+                    cwd=self.base_dir
+                )
+                
+            self._notify("Pax Console", "控制台已啟動")
+        except Exception as e:
+            self.debug_log(f"無法啟動控制台: {e}")
+            self._notify("錯誤", f"無法啟動控制台: {e}")
 
     def _init_runtime(self):
         """根據目前模式初始化 Runtime"""
@@ -118,15 +156,48 @@ class TrayRunner:
     def open_pax_console(self):
         """開啟 Pax 互動式 Console"""
         try:
-            print("[TrayApp] 正在啟動 Pax Console...")
-            subprocess.Popen(
-                [sys.executable, '-m', 'app.main'],
+            self.debug_log("嘗試啟動 Pax Console...")
+            # 確保使用 python.exe 而不是 pythonw.exe，以便彈出主視窗
+            python_exe = sys.executable
+            self.debug_log(f"原始 sys.executable: {python_exe}")
+            
+            if python_exe.lower().endswith("pythonw.exe"):
+                python_exe = python_exe.lower().replace("pythonw.exe", "python.exe")
+            
+            self.debug_log(f"目標 python_exe: {python_exe}")
+            self.debug_log(f"工作目錄 base_dir: {self.base_dir}")
+
+            # 檢查檔案是否存在
+            main_py = os.path.join(self.base_dir, "app", "main.py")
+            if not os.path.exists(main_py):
+                self.debug_log(f"錯誤: 找不到 {main_py}")
+                return
+
+            # 檢查檔案是否存在
+            main_py = os.path.join(self.base_dir, "app", "main.py")
+            if not os.path.exists(main_py):
+                self.debug_log(f"錯誤: 找不到 {main_py}")
+                return
+
+            # 強制將專案根目錄加入 PYTHONPATH (作為備援)
+            env = os.environ.copy()
+            env["PYTHONPATH"] = self.base_dir + os.pathsep + env.get("PYTHONPATH", "")
+            # 確保輸出編碼正確
+            env["PYTHONIOENCODING"] = "utf-8"
+
+            self.debug_log(f"準備啟動: {python_exe} {main_py}")
+
+            # 正式版啟動：直接啟動控制台
+            proc = subprocess.Popen(
+                [python_exe, main_py],
                 creationflags=subprocess.CREATE_NEW_CONSOLE,
                 cwd=self.base_dir,
-                env=os.environ.copy()
+                env=env
             )
+            self.debug_log(f"Popen 已執行，PID: {proc.pid}")
+            
         except Exception as e:
-            self.debug_log(f"啟動 Pax Console 失敗: {e}")
+            self.debug_log(f"啟動 Pax Console 失敗: {str(e)}\n{traceback.format_exc()}")
 
     def on_quit(self, icon, item):
         self.running = False
@@ -167,13 +238,37 @@ class TrayRunner:
             self.debug_log(f"系統匣執行失敗: {e}\n{traceback.format_exc()}")
 
 if __name__ == "__main__":
-    # 單一實例鎖 (Socket Lock)
-    try:
-        _lock_holder = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        _lock_holder.bind(('127.0.0.1', 49152))
-    except socket.error:
-        print("[TrayApp] 警告：偵測到重複執行，Pax 可能已經在運行中（請檢查系統匣）。")
-        sys.exit(0)
+    import argparse
+    import sys
+    import socket
     
-    runner = TrayRunner()
-    runner.setup_tray()
+    # 解決 Akasha 等大型庫的遞迴限制問題
+    sys.setrecursionlimit(5000)
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--console", action="store_true", help="啟動 Console 模式")
+    args, unknown = parser.parse_known_args()
+    
+    if args.console:
+        # 直接執行控制台，不檢查 Socket 鎖
+        try:
+            from app.main import run_llm_cli
+            run_llm_cli()
+        except Exception as e:
+            print(f"\n❌ 啟動控制台失敗: {e}")
+            import traceback
+            print(traceback.format_exc())
+            input("\n按任意鍵結束...")
+    else:
+        # 啟動系統匣，需要 Socket 鎖防止重複開啟
+        try:
+            _lock_holder = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            _lock_holder.bind(('127.0.0.1', 49152))
+        except socket.error:
+            # 這是目前你看到的報錯來源，現在我們透過 --console 參數繞過它
+            print("[TrayApp] 警告：Pax 已經在運行中（請檢查系統匣圖示）。")
+            sys.exit(0)
+            
+        runner = TrayRunner()
+        runner.setup_tray()
+        runner.run()

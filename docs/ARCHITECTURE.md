@@ -23,12 +23,10 @@
 - ❌ 無法集中管理、監控使用情況
 
 ### 升級後優勢
-- ✅ **雙模式支援**：雲端模式（輕量）+ 本地模式（完整功能）
-- ✅ 雲端模式：輕量級前端（20-30 MB），安裝快速
-- ✅ 本地模式：完全離線運行，隱私保護
-- ✅ **代碼高度複用**：共用核心邏輯，只切換執行環境
-- ✅ API Keys 可集中管理（雲端）或本地管理（本地）
-- ✅ 靈活的部署策略，滿足不同用戶需求
+- ✅ **可攜式套件 (Portable Dist)**：免安裝環境，解壓縮即可在任何 Windows 電腦運行。
+- ✅ **內建 Runtime**：自帶 Embedded Python 與 Portable Node.js，不影響使用者電腦。
+- ✅ **雙模式支援**：雲端模式（運算在伺服器）+ 本地模式（完全隱私）。
+- ✅ **系統匣管理**：整合 Tray App，支援模式切換與 Token 自動獲取。
 
 ---
 
@@ -72,6 +70,22 @@
                          │  │ Actions        │ │
                          │  └────────────────┘ │
                          └─────────────────────┘
+```
+
+### 執行環境架構
+```
+Pax-Portable/
+├── Pax.bat              # 🚀 啟動入口
+├── .env                 # 🔑 本地配置與 API Keys
+├── app/                 # 主程式進入點 (Console)
+├── core/                # 🔥 共用核心邏輯
+├── ui/                  # 🟢 系統匣 UI 與圖示
+├── runtime/             # 🛠️ 執行環境
+│   ├── python/          # Embedded Python 3.10
+│   ├── node/            # Portable Node.js v20
+│   ├── local/           # 本地執行器
+│   └── cloud/           # 雲端客戶端執行器
+└── tools/               # 外部 MCP 工具 (Google Map 等)
 ```
 
 ### 關鍵設計：共用核心邏輯
@@ -157,61 +171,19 @@ class RuntimeAdapter(ABC):
 
 ---
 
-## 專案結構
+## 專案結構 (原始碼)
 
 ```
 P2025_PAX/
-├── core/                          # 🔥 共用核心邏輯（兩種模式都用）
-│   ├── runtime_adapter.py        # Runtime 適配器介面
-│   ├── llm/                       # LLM 處理
-│   │   ├── handler.py            # LLM 主邏輯
-│   │   └── prompt_builder.py     # Prompt 組裝
-│   ├── mcp_tools/                 # MCP 工具
-│   │   ├── google_map/           # Google Map API
-│   │   ├── fare_calculator/      # 差旅費計算
-│   │   └── work_time/            # 工時相關工具
-│   ├── models/                    # 資料模型
-│   │   ├── request.py            # 請求模型
-│   │   └── response.py           # 回應模型
-│   └── actions/                   # 指令定義與執行
-│       ├── submit_work_time.py   # 提交工時
-│       └── apply_travel.py       # 填寫出差單
-│
-├── runtime/                       # 🔥 執行環境（可切換）
-│   ├── local/                     # 本地模式
-│   │   ├── executor.py           # 本地執行器
-│   │   └── installer.ps1         # 環境安裝腳本
-│   └── cloud/                     # 雲端模式
-│       ├── client/                # 前端
-│       │   ├── api_client.py     # HTTP Client
-│       │   └── executor.py       # 雲端執行器
-│       └── server/                # 後端
-│           ├── main.py           # FastAPI 主程式
-│           └── api/              # API 端點
-│
-├── ui/                            # 🔥 共用 UI
-│   ├── tray_app.py               # 系統匣（支援兩種模式）
-│   ├── cli_interface.py          # Console 介面
-│   └── cookie_manager.py         # Cookie 管理
-│
-├── config/                        # 配置
-│   ├── local.env.example         # 本地模式配置範例
-│   └── cloud.env.example         # 雲端模式配置範例
-│
-├── installer/                     # 安裝程式
-│   ├── setup_local.ps1           # 本地模式安裝腳本
-│   └── setup_cloud.exe           # 雲端模式安裝（只下載 .exe）
-│
-├── tests/                         # 測試
-│   ├── test_core/                # 核心邏輯測試
-│   ├── test_local/               # 本地模式測試
-│   └── test_cloud/               # 雲端模式測試
-│
-└── docs/                          # 文件
-    ├── ARCHITECTURE.md           # 本文件
-    ├── LOCAL_MODE.md             # 本地模式詳細說明
-    ├── CLOUD_MODE.md             # 雲端模式詳細說明
-    └── TEST_CASES.md             # 測試案例
+├── app/                          # 互動式 Console UI
+├── core/                         # 核心邏輯 (LLM, MCP, Actions)
+├── docs/                         # 專案文檔
+├── runtime/                      # 多模式執行適配器
+├── scripts/                      # 建置工具 (build_portable.py)
+├── tools/                        # 各式 MCP 工具原始碼
+├── ui/                           # 系統匣常駐程式
+├── portable_dist/                # 最終生成的發佈包
+└── requirements.txt              # 相依套件定義
 ```
 
 ---

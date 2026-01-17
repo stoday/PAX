@@ -4,19 +4,23 @@ Pax Tray App - 系統匣常駐程式
 支援本地與雲端模式切換
 """
 
+import sys
+import os
+
+# 確保可以導入 core 和 runtime 模組
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pystray
 from PIL import Image, ImageDraw
 import threading
-import sys
-import os
 import time
 import traceback
 import socket
 import subprocess
 import dotenv
-
-# 確保可以導入 core 和 runtime 模組
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import tkinter as tk
+from tkinter import scrolledtext
+from core.logger import get_pax_logger
 
 # 載入環境變數
 dotenv.load_dotenv()
@@ -41,9 +45,21 @@ class TrayRunner:
         os.environ["PAX_MODE"] = self.mode
         
         print(f"[TrayApp] 初始化中，目前模式: {self.mode.upper()}")
+        self.logger = get_pax_logger(self.base_dir)
+        self.logger.log("--- Pax Tray App 啟動 ---")
         self.debug_log(f"程式啟動，初始模式: {self.mode}")
         
         self.runtime = self._init_runtime()
+        
+        # 啟動自動工時補打排程 (每天 17:55)
+        try:
+            from core.actions.auto_scheduler import start_scheduler_thread
+            self.scheduler_thread = start_scheduler_thread(self.base_dir, self._notify)
+            self.debug_log("自動工時排程線程已啟動")
+            self.logger.log("自動工時排程監測已啟動 (每日 17:55)")
+        except Exception as e:
+            self.debug_log(f"啟動排程線程失敗: {e}")
+            self.logger.log(f"啟動排程線程失敗: {e}", level="ERROR")
 
     def _load_config(self):
         import json
@@ -154,8 +170,9 @@ class TrayRunner:
         print(f"[TrayApp] 已切換連至 {new_mode.upper()} 模式")
 
     def open_pax_console(self):
-        """開啟 Pax 互動式 Console"""
+        """開啟 Pax 互動式 Console修"""
         try:
+            self.logger.log("使用者手動開啟 Pax Console")
             self.debug_log("嘗試啟動 Pax Console...")
             # 確保使用 python.exe 而不是 pythonw.exe，以便彈出主視窗
             python_exe = sys.executable
@@ -200,9 +217,45 @@ class TrayRunner:
             self.debug_log(f"啟動 Pax Console 失敗: {str(e)}\n{traceback.format_exc()}")
 
     def on_quit(self, icon, item):
+        self.logger.log("--- Pax Tray App 結束 ---")
         self.running = False
         icon.stop()
         os._exit(0)
+
+    def show_history_window(self):
+        """顯示最近 7 天的歷史紀錄視窗"""
+        def create_window():
+            try:
+                window = tk.Tk()
+                window.title("Pax 任務歷史紀錄 (最近 7 天)")
+                window.geometry("600x500")
+                window.configure(bg="#1e1e1e")
+                
+                # 建立捲動文字區域
+                log_area = scrolledtext.ScrolledText(
+                    window, 
+                    wrap=tk.WORD, 
+                    width=70, 
+                    height=25,
+                    bg="#252526",
+                    fg="#d4d4d4",
+                    insertbackground="white",
+                    font=("Consolas", 10)
+                )
+                log_area.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+                
+                # 填充紀錄內容
+                history_text = self.logger.get_history_text(7)
+                log_area.insert(tk.INSERT, history_text)
+                log_area.configure(state='disabled') # 唯讀
+                
+                # 置頂視窗
+                window.attributes('-topmost', True)
+                window.mainloop()
+            except Exception as e:
+                self.debug_log(f"建立紀錄視窗失敗: {e}")
+
+        threading.Thread(target=create_window, daemon=True).start()
 
     def setup_tray(self):
         """建立系統匣選單與圖示"""
@@ -210,15 +263,9 @@ class TrayRunner:
             print("[TrayApp] 正在建立系統匣功能面板...")
             menu = pystray.Menu(
                 pystray.MenuItem("打開 Pax Console", self.open_pax_console),
+                pystray.MenuItem("歷史紀錄", self.show_history_window),
                 pystray.Menu.SEPARATOR,
-                pystray.MenuItem("運行模式", pystray.Menu(
-                    pystray.MenuItem("本地模式 (Local)", 
-                                     lambda: self.switch_mode("local"),
-                                     checked=lambda item: self.mode == "local"),
-                    pystray.MenuItem("雲端模式 (Cloud)", 
-                                     lambda: self.switch_mode("cloud"),
-                                     checked=lambda item: self.mode == "cloud")
-                )),
+                pystray.MenuItem(lambda item: f"目前模式: {self.mode.upper()}", None, enabled=False),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("結束常駐", self.on_quit)
             )

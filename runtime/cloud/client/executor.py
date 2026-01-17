@@ -36,11 +36,15 @@ class CloudRuntime(RuntimeAdapter):
         cookies: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        將訊息發送到後端伺服器處理 (含重試機制)
+        將訊息發送到後端伺服器處理 (含 API Key 與極簡格式解析)
         """
         import time
+        import re
         max_retries = 3
         retry_delay = 2
+        
+        api_key = os.getenv("PAX_CLOUD_API_KEY", "")
+        headers = {"X-API-KEY": api_key} if api_key else {}
         
         for attempt in range(max_retries):
             try:
@@ -48,10 +52,23 @@ class CloudRuntime(RuntimeAdapter):
                 response = requests.post(
                     f"{self.server_url}/api/chat",
                     json={"message": message, "cookies": cookies},
+                    headers=headers,
                     timeout=60
                 )
                 response.raise_for_status()
-                return response.json()
+                data = response.json()
+                
+                # 直接使用結構化數據
+                action_type = data.get("action", "echo")
+                response_text = data.get("response", "")
+                params = data.get("params", {})
+                
+                return {
+                    "action": action_type,
+                    "params": params,
+                    "description": response_text,
+                    "requires_confirmation": False
+                }
                 
             except requests.exceptions.RequestException as e:
                 print(f"[CloudRuntime] 嘗試 {attempt+1} 失敗: {e}")

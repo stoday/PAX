@@ -21,10 +21,12 @@ Pax 是一款整合了 LLM (Gemini) 與 MCP (Model Context Protocol) 技術的�
 
 ## 🏗️ 專案特色
 
-*   **雙模式路徑**：支援「本地模式」(Local) 保障隱私，與「雲端模式」(Cloud) 快速回應。
+*   **雙模式路徑**：支援「本地模式」(Local) 保障隱私，與「雲端模式」(Cloud) 整合雲端大腦。
+*   **智慧自動化**：每日 17:55 自動掃描並補填漏登工時 (方案 B+)。
+*   **任務紀錄**：內建日誌系統與 30 天滾動紀錄，隨時查看最近 7 天的任務歷史。
 *   **免安裝環境**：內建嵌入式 Python 與 Node.js，不汙染系統環境。
-*   **系統匣整合**：常駐背景執行，隨點隨用，支援自動獲取 Token。
-*   **智慧 MCP 工具**：整合 Google Map 距離計算、工時自動提交、差旅費率查詢。
+*   **系統匣整合**：常駐背景執行，支援自動獲取 Token。
+*   **核心 MCP 工具**：整合 Google Map 距離計算、工時自動提交、高鐵台鐵費率查詢。
 
 ---
 
@@ -42,11 +44,17 @@ pip install -r requirements.txt
 ```
 
 ### 3. 建置發佈包
-執行內建的建置指令，這會自動下載 Python/Node Runtimes 並打包：
-```powershell
-python scripts/build_portable.py
-```
-生成的成品將位於 `portable_dist/` 目錄。
+執行內建的建置指令，這會自動打包相關環境：
+- **可攜式全功能版**：
+  ```powershell
+  python scripts/build_portable.py
+  ```
+- **雲端模式版** (分離 Client 與 Server)：
+  ```powershell
+  python scripts/build_cloud_service.py
+  ```
+
+生成的成品將統一位於 **`dist/`** 目錄下。
 
 ---
 

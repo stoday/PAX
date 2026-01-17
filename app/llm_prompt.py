@@ -1,15 +1,15 @@
+# -*- coding: utf-8 -*-
 import datetime
+import os
 
 def get_weekend():
     """
     取得當月所有週六、週日，回傳為以逗號分隔的字串（每個為 MM-DD）。
-    範例："11-01,11-02,..."
     """
     today = datetime.date.today()
     year, month = today.year, today.month
 
     weekends = ""
-    # 僅處理從月初到今天（含今天）
     last_day = today.day
     for day in range(1, last_day + 1):
         d = datetime.date(year, month, day)
@@ -19,8 +19,14 @@ def get_weekend():
 
 
 def prompt_create(user_message=""):
+    """
+    建立 LLM Prompt，會自動判斷當前 PAX_MODE 來調整指令
+    """
     year, month, today, weekends = get_weekend()
-    user_prompt = f"""
+    pax_mode = os.getenv("PAX_MODE", "local").lower()
+    
+    # 基礎 Prompt 部分
+    base_prompt = f"""
 # 任務:
 你是工作小幫手，主要的任務有2個:
 1. 工時填寫，負責協助使用者整理每日上下班時間、未打卡原因、備註等資訊。
@@ -29,57 +35,46 @@ def prompt_create(user_message=""):
 
 # 今日日期資訊
 今天是:{today}，請填寫從'{year}-{month}-01'到今天的工時，其中\{weekends}\為例假日
-""" + """
+"""
+
+    # 針對模式調整指令
+    if pax_mode == "cloud":
+        mode_instruction = """
+# 模式指令 (雲端模式 - Cloud Mode):
+你目前正在雲端伺服器運行。你「不具備」直接操作使用者網頁或提交系統的權限。
+因此，當你需要執行「提交工時」或「填寫出差單」的操作時，請務必將指令封裝成以下 JSON 格式回傳，
+這會讓使用者的本地端收到底稿後自動執行真正的手動/API 操作：
+
+{
+  "response": "給使用者的親切回應（說明你幫他準備了什麼）",
+  "action": "指令名稱 (例如: submit_work_time 或 apply_travel)",
+  "params": { 
+      "work_times": { ...工時資料... },
+      "InWorkRoute": [ ...出差路線資料... ]
+  }
+}
+*注意：若只是普通對話，action 請填寫 "echo"，params 填寫 {"message": "你的回覆"}。請務必輸出合法的 JSON 字串。*
+"""
+    else:
+        mode_instruction = """
+# 模式指令 (本地模式 - Local Mode):
+你具備直接呼叫工具的操作權限。
+1. 工時填寫：請生成格式如 {"work_times":{...}} 的 JSON 並呼叫 submit_work_times 工具。
+2. 出差單填寫：請呼叫 dc_apply 工具。
+"""
+
+    rule_sections = """
 # 工時填寫規則:
-如果使用者的需求不是與填寫工作時間(工時)，可以做出簡短適當的回應，並且詢問可以幫忙使用者作什麼有關工時填寫的事。
-如果使用者的需求是與填寫工作時間(工時)相關，請輸出以下格式的JSON字串:
-{"work_times":{"yyyyMMDD":{"arrival_time":"HH:MM","leave_time":"HH:MM","reason":"原因","remark":"備註"},...}}
-請只輸出dictionary，不輸出多餘文字與程式碼區塊，不然後面會無法處理。
-若是使用者未詳細說明工作時間資訊細節，則使用預設值，生成從月初到今天的每日工時資訊，預設值為:
+若是使用者未詳細說明工作時間資訊細節，則使用預設值：
 arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark="" 來產生每日工時資訊。
-範例:
-{"work_times":{"20251201":{"arrival_time":"09:00","leave_time":"18:00","reason":"忘刷","remark":""},
- "20251202":{"arrival_time":"10:00","leave_time":"17:30","reason":"忘刷","remark":""}...}}
- <一直填到今天日期為止>}
-如果使用者有指定那些日期需要填寫工時，例如: 12月3日與4日上班時間10點和9點，則生成該日期的工時資訊為:
-{"work_times":{"20251203":{"arrival_time":"10:00","leave_time":"18:00","reason":"忘刷","remark":""},
- "20251204":{"arrival_time":"09:00","leave_time":"18:00","reason":"忘刷","remark":""}}}
-完成工時生成後，使用tool submit_work_times將工時資料提交到系統中。
-""" + """
+
 # 出差單填寫規則:
-    1.預設使用大眾交通工具規劃路線(maps_directions)
-    2.當規畫中有需要搭乘公車的部分，將起始點與終點設為開車進行距離與時間測量，若搭乘公車前後有步行規劃，連同步行行程也納入開車計算
-    3.若有改為開車，則使用計程車價格(taxi_fare_estimator)計算費用
-    4.通過tools精確抓取大眾交通工具(高鐵(thsr_fare_estimator)、台鐵(tr_fare_estimator))的花費
-    5.根據以上資料進行填寫出差單的InWorkRoute欄位，並回傳符合格式List
-    6.若有多段路程，請將每段步行以外的路程以[{"NUMBER":1,...}, {"NUMBER":2,...}]的形式回傳
-    "InWorkRoute": [
-        {
-            "NUMBER": 1,
-            "SOURCE": "R",
-            "UUID": "",
-            "FORMID": "",
-            "ORD": 0,
-            "BDATE": "<start_date, ex: 2025/12/11>",
-            "MOVER": <mover, ex: Y>, #搭乘交通工具編號僅有[高鐵:A,飛機:B,輪船:C,客運:D,火車(自強):E,火車(莒光):F,火車(復興):G,火車(普通):H,火車(電聯車):I,捷運:X,計程車:Y,其他:Z]
-            "MOVER_NAME": "<mover_name, ex: 計程車>" #僅有[高鐵,飛機,輪船,客運,火車(自強),火車(莒光),火車(復興),火車(普通),火車(電聯車),捷運,計程車,其他],
-            "MOVER_OTHER": "",
-            "BPLACE": "<begin_location>" #該路程起始點,
-            "EPLACE": "<end_location>" #該路程終點,
-            "REASON": "<reason_for_taxi>" #搭乘原因,
-            "PRICE": "<price>" #該路程費用,
-            "PRICE_FMT": "<price>" #該路程費用(同PRICE)),
-            "ACTYEAR": <ACTYEAR, ex: 2026> #出差年,
-            "PROJID": "",
-            "PROJID_NAME": "",
-            "VALID_FLAG": "1",
-            "UD_ADD": "Y",
-        }
-    ],
-    7. 產生完以上list後，使用tool dc_apply將出差單資料提交到系統中。
-""" + f"""
+1. 預設使用大眾交通工具規劃路線(maps_directions)
+2. 通過工具精確抓取交通花費，並整理成 InWorkRoute 格式。
+"""
+
+    final_prompt = base_prompt + mode_instruction + rule_sections + f"""
 # 使用者訊息:
 {user_message}
 """
-    return user_prompt
-
+    return final_prompt

@@ -15,6 +15,7 @@ import dotenv
 from pyfiglet import Figlet
 from rich.console import Console
 from rich.panel import Panel
+from core.logger import get_pax_logger
 
 # 載入環境變數
 dotenv.load_dotenv()
@@ -71,6 +72,9 @@ def run_llm_cli():
     from rich.panel import Panel
     from rich.rule import Rule
     
+    logger = get_pax_logger(base_dir)
+    logger.log(f"--- Pax Console 啟動 (模式: {os.getenv('PAX_MODE', 'local').upper()}) ---")
+    
     instructions = (
         "• 範圍: [bold white]本月 1 日至今日[/bold white]\n"
         "• 預設: [bold white]09:00 - 18:00[/bold white]\n"
@@ -94,6 +98,7 @@ def run_llm_cli():
         
         if user_message.lower() in ['exit', 'quit', '退出', 'stop']:
             console.print("\n[bold yellow]感謝使用 Pax，再見！[/bold yellow]")
+            logger.log("--- Pax Console 結束 (使用者結束) ---")
             break
             
         if not user_message:

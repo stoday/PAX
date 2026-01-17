@@ -91,18 +91,11 @@ class LLMHandler:
         # 使用當前 Python 解釋器（虛擬環境中的 Python）
         python_exe = sys.executable
         
-        return {
-            # 暫時註解掉 submit_work_times，因為它可能需要特殊的環境設定
-            # "submit_work_times": {
-            #     "command": python_exe,
-            #     "args": ["-X", "utf8", llm_uploader_path],
-            #     "transport": "stdio",
-            # },
-            # 暫時註解掉 google-map，因為服務還沒啟動
-            # "google-map": {
-            #     "url": "http://localhost:3000/mcp",
-            #     "transport": "streamable_http",
-            # },
+        # 根據運行模式決定 MCP 工具
+        # 雲端模式下，移除實體「打卡」連線，改由 LLM 回傳指令給 Client 執行
+        pax_mode = os.getenv("PAX_MODE", "local").lower()
+        
+        mcp_tools = {
             "fare_estimator": {
                 "command": python_exe,
                 "args": [os.path.join(travel_helper_dir, "fare_estimator.py")],
@@ -112,51 +105,63 @@ class LLMHandler:
                 "command": python_exe,
                 "args": [os.path.join(travel_helper_dir, "apply.py")],
                 "transport": "stdio",
+            },
+             "google-map": {
+                "url": f"http://localhost:{os.getenv('MCP_SERVER_PORT', '3000')}/mcp",
+                "transport": "streamable_http",
             }
         }
+        
+        # 只有在本地模式才加入實體打卡工具
+        if pax_mode == "local":
+            mcp_tools["submit_work_times"] = {
+                "command": python_exe,
+                "args": ["-X", "utf8", llm_uploader_path],
+                "transport": "stdio",
+            }
+            
+        return mcp_tools
     
-    def _parse_response(self, llm_response: str, original_message: str) -> Dict[str, Any]:
-        """
-        解析 LLM 回應並生成指令
-        
-        Args:
-            llm_response: LLM 的回應
-            original_message: 原始用戶訊息
-        
-        Returns:
-            包含 action 和 params 的字典
-        """
-        # TODO: 實作更智能的回應解析
-        # 目前先返回簡單的 echo 指令
-        
-        # 如果回應包含工時相關資訊，生成 submit_work_time 指令
+        import json
+        import re
+
+        # 嘗試從回應中提取並解析 JSON (支援純 JSON 或帶有 Markdown 的 JSON)
+        try:
+            # 尋找 JSON 區塊
+            json_match = re.search(r"({.*})", llm_response, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group(1))
+                # 如果符合我們要求的新結構，直接回傳
+                if "action" in data and "response" in data:
+                    return {
+                        "action": data["action"],
+                        "params": data.get("params", {}),
+                        "description": data["response"],
+                        "requires_confirmation": data.get("requires_confirmation", False)
+                    }
+        except Exception:
+            pass # 如果解析失敗，進入傳統關鍵字判定邏輯
+
+        # 傳統關鍵字判定與 fallback
         if "work_times" in llm_response.lower() or "工時" in original_message:
             return {
                 "action": "submit_work_time",
-                "params": {
-                    "response": llm_response
-                },
+                "params": {"response": llm_response},
                 "description": "LLM 已處理您的工時請求",
                 "requires_confirmation": False
             }
         
-        # 如果回應包含出差相關資訊，生成 apply_travel 指令
         if "InWorkRoute" in llm_response or "出差" in original_message:
             return {
                 "action": "apply_travel",
-                "params": {
-                    "response": llm_response
-                },
+                "params": {"response": llm_response},
                 "description": "LLM 已處理您的出差申請",
                 "requires_confirmation": False
             }
         
-        # 預設返回 echo 指令
         return {
             "action": "echo",
-            "params": {
-                "message": llm_response
-            },
-            "description": "LLM 回應",
+            "params": {"message": llm_response},
+            "description": llm_response,
             "requires_confirmation": False
         }

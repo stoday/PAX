@@ -53,7 +53,7 @@ class CloudRuntime(RuntimeAdapter):
                     f"{self.server_url}/api/chat",
                     json={"message": message, "cookies": cookies},
                     headers=headers,
-                    timeout=60
+                    timeout=600
                 )
                 response.raise_for_status()
                 data = response.json()

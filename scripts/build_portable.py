@@ -183,6 +183,16 @@ def cleanup_size():
 
 def copy_sources():
     log("[4/6] Copying project sources...")
+    
+    # Copy specific files to DIST_DIR
+    files_to_copy = ["config.toml"]
+    for f_name in files_to_copy:
+        src_file = os.path.join(BASE_DIR, f_name)
+        dst_file = os.path.join(DIST_DIR, f_name)
+        if os.path.exists(src_file):
+            shutil.copy2(src_file, dst_file)
+            log(f"Copied file: {f_name}")
+
     folders = ["app", "core", "tools", "ui", "bin"] # Removed runtime from main loop
     for folder in folders:
         src = os.path.join(BASE_DIR, folder)
@@ -210,10 +220,26 @@ def copy_sources():
                 shutil.copy2(src_sub, dst_sub)
                 log(f"Copied runtime source file: {sub}")
     
-    for f in [".env"]:
-        src = os.path.join(BASE_DIR, f)
-        if os.path.exists(src):
-            shutil.copy2(src, os.path.join(DIST_DIR, f))
+    # 處理 .env 檔案
+    src_env = os.path.join(BASE_DIR, ".env")
+    dst_env = os.path.join(DIST_DIR, ".env")
+    
+    lines = []
+    if os.path.exists(src_env):
+        with open(src_env, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+    
+    with open(dst_env, 'w', encoding='utf-8') as f:
+        f.write("# Pax Portable Environment Settings\n")
+        has_mode = False
+        for line in lines:
+            if line.strip().startswith("PAX_MODE="):
+                f.write("PAX_MODE=local\n")
+                has_mode = True
+            else:
+                f.write(line)
+        if not has_mode:
+            f.write("PAX_MODE=local\n")
 
 def create_launcher():
     log("[5/6] Creating Pax.bat launcher...")
@@ -223,6 +249,8 @@ set "ROOT=%~dp0"
 set "PY_PATH=%ROOT%runtime\\python"
 set "NODE_PATH=%ROOT%runtime\\node"
 set "PATH=%PY_PATH%;%PY_PATH%\\Scripts;%NODE_PATH%;%PATH%"
+set "PYTHONPATH=%ROOT%"
+set "PAX_MODE=local"
 
 if "%1"=="--debug" (
     echo [DEBUG MODE] Starting Pax in foreground...
@@ -231,7 +259,7 @@ if "%1"=="--debug" (
     exit /b
 )
 
-echo Starting Pax...
+echo Starting Pax (Portable Mode)...
 start "" "%PY_PATH%\\pythonw.exe" "%ROOT%ui\\tray_app.py"
 exit
 """

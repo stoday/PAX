@@ -13,15 +13,25 @@ BASE_TIMESHEET_URL = "https://hrwt.iii.org.tw/TSM/MyWorkTime.aspx"
 def generate_form_payload(year_month: str, work_times: Dict[str, Any], soup: BeautifulSoup) -> Dict[str, str]:
     """生成表單 POST Payload"""
     year, month = map(int, year_month.split('/'))
+    
+    # 取得 ASP.NET 隱藏欄位，並加上安全檢查
+    def get_val(name):
+        tag = soup.find('input', {'name': name})
+        return tag['value'] if tag and 'value' in tag.attrs else ""
+
     # 基本隱藏欄位
     payload = {
         "__EVENTTARGET": "ctl00$ContentPlaceHolder1$btnEdit",
         "__EVENTARGUMENT": "",
-        "__VIEWSTATE": soup.find('input', {'name': '__VIEWSTATE'})['value'],
-        "__VIEWSTATEGENERATOR": soup.find('input', {'name': '__VIEWSTATEGENERATOR'})['value'],
-        "__EVENTVALIDATION": soup.find('input', {'name': '__EVENTVALIDATION'})['value'],
+        "__VIEWSTATE": get_val('__VIEWSTATE'),
+        "__VIEWSTATEGENERATOR": get_val('__VIEWSTATEGENERATOR'),
+        "__EVENTVALIDATION": get_val('__EVENTVALIDATION'),
         "ctl00$ContentPlaceHolder1$txb_StDay": year_month,
     }
+    
+    # 如果關鍵欄位都沒抓到，代表頁面不正確
+    if not payload["__VIEWSTATE"]:
+        return None
     
     days_in_month = calendar.monthrange(year, month)[1]
     work_days_list = []
@@ -56,11 +66,26 @@ def submit_work_time(cookies: Optional[Dict[str, Any]] = None, **params) -> Dict
     提交工時的具體實作
     """
     try:
-        # 支援直接傳入 work_times 字典 (由 AutoScheduler 使用)
-        # 或從 LLM 回應解析 (目前 submit_work_time.py 原本的邏輯)
+        # 取得傳入參數
         work_times = params.get("work_times", {})
         
-        # 如果沒提供 work_times，可能需要解析 llm_response (這裡保留擴展性)
+        # 強健性處理：如果 LLM 回傳的是 List 而非 Dict，嘗試轉換它
+        if isinstance(work_times, list):
+            new_work_times = {}
+            for item in work_times:
+                if isinstance(item, dict):
+                    # 嘗試抓取日期欄位 (可能是 'date' 或 'YYYY-MM-DD' 格式的 Key)
+                    date_key = item.get("date") or item.get("日期")
+                    if date_key:
+                        new_work_times[date_key] = item
+                    elif len(item.keys()) > 0:
+                        # 如果沒有明確日期欄位，但第一個 Key 看起來像日期 (YYYY-MM-DD)
+                        first_key = list(item.keys())[0]
+                        if "-" in first_key and len(first_key) >= 8:
+                            new_work_times[first_key] = item[first_key]
+            work_times = new_work_times
+
+        # 支援直接傳入 work_times 字典 (由 AutoScheduler 使用)
         if not work_times and "response" in params:
              # TODO: 解析 LLM 回應內容轉為 work_times 字典
              pass
@@ -94,6 +119,8 @@ def submit_work_time(cookies: Optional[Dict[str, Any]] = None, **params) -> Dict
         
         # 2. 準備 Payload
         payload = generate_form_payload(target_year_month, work_times, soup)
+        if payload is None:
+            return {"status": "auth_failed", "message": "無法從網頁抓取必要欄位，可能是認證失效。"}
         
         # 3. 執行 POST 提交
         post_resp = session.post(BASE_TIMESHEET_URL, data=payload, headers=headers, allow_redirects=False)

@@ -16,7 +16,15 @@ class AutoWorkTimeScheduler:
         self.base_dir = base_dir
         self.config_path = os.path.join(self.base_dir, "pax_config.json")
         self.last_run_file = os.path.join(self.base_dir, "last_auto_run.txt")
-        self.target_time = (17, 55)  # 每天 17:55 執行
+        
+        # 從環境變數讀取執行時間，預設為 17:55
+        time_str = os.getenv("AUTO_FILL_TIME", "17:55")
+        try:
+            h, m = map(int, time_str.split(':'))
+            self.target_time = (h, m)
+        except:
+            self.target_time = (17, 55)
+            
         self.logger = get_pax_logger(self.base_dir)
         
     def _get_last_run_date(self) -> str:
@@ -38,7 +46,7 @@ class AutoWorkTimeScheduler:
         now = datetime.datetime.now()
         today_str = now.strftime("%Y-%m-%d")
         
-        # 1. 檢查時間是否到了 17:55
+        # 1. 檢查時間是否到了設定時間
         if now.hour == self.target_time[0] and now.minute == self.target_time[1]:
             # 2. 檢查今天是否已經跑過
             if self._get_last_run_date() != today_str:
@@ -144,7 +152,8 @@ def start_scheduler_thread(base_dir: str, notify_fn):
     scheduler = AutoWorkTimeScheduler(base_dir)
     
     def loop():
-        print("[Scheduler] 定時監控線程已啟動 (目標: 17:55)")
+        target_str = f"{scheduler.target_time[0]:02d}:{scheduler.target_time[1]:02d}"
+        print(f"[Scheduler] 定時監控線程已啟動 (目標: {target_str})")
         while True:
             try:
                 if scheduler.should_run_now():

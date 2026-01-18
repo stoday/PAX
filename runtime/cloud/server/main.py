@@ -12,9 +12,19 @@ from fastapi import FastAPI, HTTPException, Request, Depends, Header
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
+import dotenv
+
 # 確保可以導入 core 模組
 # 結構: root/runtime/cloud/server/main.py -> 需要往上四層到達 root
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(0, base_dir)
+
+# 載入環境變數
+dotenv.load_dotenv(os.path.join(base_dir, ".env"))
+
+print(f"\n[Server Debug] Current File Path: {os.path.abspath(__file__)}")
+print(f"[Server Debug] Base Directory: {base_dir}")
+print(f"[Server Debug] Core Module Path: {os.path.join(base_dir, 'core')}")
 
 from core.llm.handler import LLMHandler
 
@@ -54,9 +64,12 @@ async def chat(request: ChatRequest, _ = Depends(verify_api_key)):
         print(f"[Server] 收到請求: {request.message[:50]}...")
         
         # 調用 LLM Handler 處理訊息
-        # 由於 prompt 已修改為要求 JSON，LLMHandler._parse_response 將嘗試解析它
-        action_dict = llm_handler.process_message(request.message, request.cookies)
+        # 由於 akasha 內部會呼叫 asyncio.run()，而 FastAPI 本身已在執行 event loop，
+        # 直接呼叫會導致 RuntimeError。我們必須將其放到獨立的 threadpool 中執行。
+        from fastapi.concurrency import run_in_threadpool
+        action_dict = await run_in_threadpool(llm_handler.process_message, request.message, request.cookies)
         
+        print(f"[Server] 請求處理完成，準備回傳 JSON")
         # 直接回傳結構化 JSON 給 Client
         return {
             "response": action_dict.get("description") or action_dict.get("params", {}).get("message", "已處理您的請求"),

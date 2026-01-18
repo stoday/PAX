@@ -18,9 +18,28 @@ import traceback
 import socket
 import subprocess
 import dotenv
-import tkinter as tk
-from tkinter import scrolledtext
+try:
+    import tkinter as tk
+    from tkinter import scrolledtext
+    HAS_TKINTER = True
+except ImportError:
+    HAS_TKINTER = False
+
 from core.logger import get_pax_logger
+
+# 載入 TOML 設定
+def get_app_version(base_dir):
+    try:
+        import tomllib as toml 
+    except ImportError:
+        import pip._vendor.tomli as toml
+    
+    config_path = os.path.join(base_dir, "config.toml")
+    if os.path.exists(config_path):
+        with open(config_path, "rb") as f:
+            config = toml.load(f)
+            return config.get("general", {}).get("version", "unk")
+    return "0.0"
 
 # 載入環境變數
 dotenv.load_dotenv()
@@ -44,22 +63,28 @@ class TrayRunner:
         self.mode = self._load_config().get("mode", os.getenv("PAX_MODE", "local")).lower()
         os.environ["PAX_MODE"] = self.mode
         
-        print(f"[TrayApp] 初始化中，目前模式: {self.mode.upper()}")
+        self.version = get_app_version(self.base_dir)
+        
+        print(f"[TrayApp] 初始化中，版本: {self.version}, 目前模式: {self.mode.upper()}")
         self.logger = get_pax_logger(self.base_dir)
-        self.logger.log("--- Pax Tray App 啟動 ---")
-        self.debug_log(f"程式啟動，初始模式: {self.mode}")
+        self.logger.log(f"--- Pax Tray App v{self.version} 啟動 ---")
+        self.debug_log(f"程式啟動，版本: {self.version}, 初始模式: {self.mode}")
         
         self.runtime = self._init_runtime()
         
-        # 啟動自動工時補打排程 (每天 17:55)
+        # 啟動自動工時補打排程 (讀取 .env)
         try:
             from core.actions.auto_scheduler import start_scheduler_thread
             self.scheduler_thread = start_scheduler_thread(self.base_dir, self._notify)
-            self.debug_log("自動工時排程線程已啟動")
-            self.logger.log("自動工時排程監測已啟動 (每日 17:55)")
+            target_time = os.getenv("AUTO_FILL_TIME", "17:55")
+            self.debug_log(f"自動工時排程線程已啟動 (目標: {target_time})")
+            self.logger.log(f"自動工時排程監測已啟動 (每日 {target_time})")
         except Exception as e:
             self.debug_log(f"啟動排程線程失敗: {e}")
             self.logger.log(f"啟動排程線程失敗: {e}", level="ERROR")
+
+        # 啟動開機自動認證檢查
+        threading.Thread(target=self._validate_auth_on_startup, daemon=True).start()
 
     def _load_config(self):
         import json
@@ -120,6 +145,8 @@ class TrayRunner:
             self.debug_log(f"無法啟動控制台: {e}")
             self._notify("錯誤", f"無法啟動控制台: {e}")
 
+            return None
+
     def _init_runtime(self):
         """根據目前模式初始化 Runtime"""
         from app.main import get_runtime
@@ -129,6 +156,46 @@ class TrayRunner:
             self.debug_log(f"初始化 Runtime 失敗 ({self.mode}): {e}")
             print(f"[TrayApp] 初始化 Runtime 失敗: {e}")
             return None
+
+    def _validate_auth_on_startup(self):
+        """開機時檢查認證狀態，若無效則自動開啟登入頁面"""
+        self.debug_log("正在執行開機認證檢查...")
+        from core.actions.utils import get_auth_cookies
+        from core.actions.submit_work_time import BASE_TIMESHEET_URL
+        import requests
+        from bs4 import BeautifulSoup
+
+        cookies = get_auth_cookies()
+        
+        # 1. 檢查是否有基本資料
+        has_info = all([cookies.get('ASP.NET_SessionId'), cookies.get('clientTicket'), cookies.get('clientUserName')])
+        
+        should_reauth = False
+        if not has_info:
+            self.debug_log("偵測到尚未完成首次認證")
+            should_reauth = True
+        else:
+            # 2. 實測一次連線
+            try:
+                headers = {"User-Agent": "Mozilla/5.0"}
+                resp = requests.get(BASE_TIMESHEET_URL, cookies=cookies, headers=headers, timeout=10)
+                if resp.status_code != 200 or "__VIEWSTATE" not in resp.text:
+                    self.debug_log("偵測到現有認證已過期")
+                    should_reauth = True
+            except:
+                self.debug_log("認證檢查連線異常，跳過自動登入")
+                return
+
+        if should_reauth:
+            self.logger.log("偵測到需要認證，自動開啟登入視窗...")
+            self._notify("Pax 認證提醒", "偵測到您尚未登入或認證已過期，正在為您開啟登入網頁...")
+            try:
+                from app.get_token import get_tokens_from_browser
+                get_tokens_from_browser()
+                self._notify("認證完成", "已成功獲取認證資料，Pax 現在已準備就緒！")
+                self.logger.log("自動認證完成")
+            except Exception as e:
+                self.debug_log(f"自動認證失敗: {e}")
 
     def create_image(self, running=False):
         """建立狀態圖示"""
@@ -224,6 +291,21 @@ class TrayRunner:
 
     def show_history_window(self):
         """顯示最近 7 天的歷史紀錄視窗"""
+        if not HAS_TKINTER:
+            # 如果不支援 GUI，嘗試用系統預設記事本開啟
+            log_path = os.path.join(self.base_dir, "pax_tasks.log")
+            if os.path.exists(log_path):
+                try:
+                    import subprocess
+                    # 在 Windows 下用 notepad 開啟
+                    subprocess.Popen(['notepad.exe', log_path])
+                    self._notify("日誌檢視", "已使用記事本為您開啟歷史紀錄。")
+                except:
+                    self._notify("系統限制", "請手動開啟根目錄下的 pax_tasks.log")
+            else:
+                self._notify("系統限制", "目前尚無歷史紀錄。")
+            return
+
         def create_window():
             try:
                 window = tk.Tk()
@@ -261,19 +343,25 @@ class TrayRunner:
         """建立系統匣選單與圖示"""
         try:
             print("[TrayApp] 正在建立系統匣功能面板...")
-            menu = pystray.Menu(
-                pystray.MenuItem("打開 Pax Console", self.open_pax_console),
-                pystray.MenuItem("歷史紀錄", self.show_history_window),
+            menu_items = [
+                pystray.MenuItem("打開 Pax Console", self.open_pax_console)
+            ]
+            
+            # 無論有沒有 TK 都顯示歷史紀錄 (沒有就用 Notepad)
+            menu_items.append(pystray.MenuItem("歷史紀錄", self.show_history_window))
+                
+            menu_items.extend([
                 pystray.Menu.SEPARATOR,
-                pystray.MenuItem(lambda item: f"目前模式: {self.mode.upper()}", None, enabled=False),
-                pystray.Menu.SEPARATOR,
+                pystray.MenuItem(lambda item: f"Pax v{self.version}", None, enabled=False),
                 pystray.MenuItem("結束常駐", self.on_quit)
-            )
+            ])
+            
+            menu = pystray.Menu(*menu_items)
             
             self.icon = pystray.Icon(
                 "PaxRunner", 
                 self.create_image(running=True), 
-                f"Pax ({self.mode.upper()})",
+                f"Pax v{self.version} ({self.mode.upper()})",
                 menu=menu
             )
             

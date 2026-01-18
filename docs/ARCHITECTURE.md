@@ -27,6 +27,10 @@
 - ✅ **內建 Runtime**：自帶 Embedded Python 與 Portable Node.js，不影響使用者電腦。
 - ✅ **雙模式支援**：雲端模式（運算在伺服器）+ 本地模式（完全隱私）。
 - ✅ **系統匣管理**：整合 Tray App，支援模式切換與 Token 自動獲取。
+- ✅ **結構化通訊 (Structured JSON)**：雲端模式採用 JSON 指令傳輸，確保邏輯與執行的完美分離。
+- ✅ **全自動認證 (Silent Auth)**：開機自動檢查憑證有效性，具備無人值守的網址監控跳轉邏輯。
+- ✅ **統一配置管理**：透過 `config.toml` 進行版本與全局參數管理。
+- ✅ **強健性設計**：針對 LLM 輸出不穩定、Token 過期、無 GUI 環境具備自動容錯。
 
 ---
 
@@ -129,15 +133,14 @@ class RuntimeAdapter(ABC):
 - 🔐 API Keys 集中管理
 - 🔄 自動更新（只需更新後端）
 
-**架構**：
-```
-使用者電腦                     後端伺服器
-┌──────────────┐              ┌──────────────┐
-│ PaxTrayApp   │─────HTTP────>│ FastAPI      │
-│ (20 MB)      │<─────────────│ + LLM        │
-│              │              │ + MCP Tools  │
-└──────────────┘              └──────────────┘
-```
+**架構詳細流程**：
+1. **Client**: 接收用戶訊息，透過 HTTP GET/POST 發送到伺服器。
+2. **Server**: 載入 `akasha` (大腦)，掛載 MCP 工具，但不掛載具備實體副作用的打卡工具。
+3. **Protocol**: Server 將 LLM 回應解析為結構化 JSON (Action + Params) 回傳。
+4. **Client**: 接收 JSON，如果是 `submit_work_time` 等指令，則在「本地」使用自己的 Cookie 執行 Action。
+
+**伺服器效能優化**：
+由於 `akasha` 內部使用 `asyncio.run()`，這在 FastAPI 的非同步環境中會產生衝突。我們採用了 `fastapi.concurrency.run_in_threadpool` 來確保伺服器處理時不會阻塞事件迴圈。
 
 ---
 
@@ -574,6 +577,9 @@ docker run -p 8000:8000 pax-backend
 
 ---
 
-**文件版本**：v2.0（混合模式）  
-**最後更新**：2026-01-16  
+---
+
+**文件版本**：v0.5.1  
+**最後更新**：2026-01-18  
+**狀態**：🚀 v0.5 穩定版發布
 **作者**：Pax Team

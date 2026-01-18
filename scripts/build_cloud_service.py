@@ -80,8 +80,8 @@ def setup_client_env():
     subprocess.run([os.path.join(py_dir, "python.exe"), pip_script, "--no-warn-script-location"], check=True, stdout=subprocess.DEVNULL)
     
     # 為 Client 安裝僅需的基礎套件 (不要裝 akasha/torch 等大型庫)
-    log("Installing slim requirements (requests, selenium, rich) for Client...")
-    slim_reqs = ["requests", "selenium", "python-dotenv", "rich", "pyfiglet"]
+    log("Installing slim requirements (requests, selenium, pydantic, beautifulsoup4, rich) for Client...")
+    slim_reqs = ["requests", "selenium", "python-dotenv", "rich", "pyfiglet", "pydantic", "beautifulsoup4"]
     subprocess.run([os.path.join(py_dir, "python.exe"), "-m", "pip", "install"] + slim_reqs, check=True, stdout=subprocess.DEVNULL)
     
     if os.path.exists(pip_script): os.remove(pip_script)
@@ -113,7 +113,8 @@ def build_client():
     # 定義客戶端需要的 Key (移除 Gemini, Google Map 等敏感 Key)
     client_keys = [
         "ASP_NET_SESSION_ID", "CLIENT_TICKET", "CLIENT_USERNAME",
-        "PAX_MODE", "PAX_SERVER_URL", "PAX_CLOUD_API_KEY"
+        "PAX_MODE", "PAX_SERVER_URL", "PAX_CLOUD_API_KEY",
+        "AUTO_FILL_TIME"
     ]
     
     with open(src_env, 'r', encoding='utf-8') as f:
@@ -150,6 +151,9 @@ pause
 """
     with open(os.path.join(CLIENT_DIR, "PaxClient.bat"), "w", encoding="utf-8") as f:
         f.write(bat_content)
+        
+    # 複製版號設定
+    shutil.copy2(os.path.join(BASE_DIR, "config.toml"), os.path.join(CLIENT_DIR, "config.toml"))
 
 def build_server():
     log("[3/4] Preparing Server Source Package (No Python included)...")
@@ -157,7 +161,7 @@ def build_server():
     os.makedirs(SERVER_DIR, exist_ok=True)
     
     # 複製伺服器「大腦」所需的所有核心功能與 MCP 工具
-    folders = ["core", "tools"]
+    folders = ["core", "tools", "app"]
     for folder in folders:
         src = os.path.join(BASE_DIR, folder)
         dst = os.path.join(SERVER_DIR, folder)
@@ -211,6 +215,9 @@ def build_server():
     
     with open(os.path.join(SERVER_DIR, "start_server.bat"), "w", encoding="utf-8") as f:
         f.write("@echo off\nset PYTHONPATH=.\npython runtime\\cloud\\server\\main.py\npause\n")
+
+    # 複製版號設定
+    shutil.copy2(os.path.join(BASE_DIR, "config.toml"), os.path.join(SERVER_DIR, "config.toml"))
 
 def final_cleanup():
     log("[4/4] Final Cleanup...")

@@ -17,6 +17,22 @@ from rich.console import Console
 from rich.panel import Panel
 from core.logger import get_pax_logger
 
+# 載入 TOML 設定
+def get_app_version():
+    try:
+        import tomllib as toml # Python 3.11+
+    except ImportError:
+        import pip._vendor.tomli as toml # Fallback for 3.10
+    
+    config_path = os.path.join(base_dir, "config.toml")
+    if os.path.exists(config_path):
+        with open(config_path, "rb") as f:
+            config = toml.load(f)
+            return config.get("general", {}).get("version", "unk")
+    return "0.0"
+
+APP_VERSION = get_app_version()
+
 # 載入環境變數
 dotenv.load_dotenv()
 
@@ -48,7 +64,7 @@ def display_welcome_banner():
     panel = Panel.fit(
         ascii_banner.rstrip(),
         border_style="cyan",
-        title="Pax 便利工作助手",
+        title=f"Pax 便利工作助手 v{APP_VERSION}",
         subtitle=f"目前的運行模式: [bold yellow]{os.getenv('PAX_MODE', 'local').upper()}[/bold yellow]",
         style="bold magenta",
     )
@@ -73,13 +89,13 @@ def run_llm_cli():
     from rich.rule import Rule
     
     logger = get_pax_logger(base_dir)
-    logger.log(f"--- Pax Console 啟動 (模式: {os.getenv('PAX_MODE', 'local').upper()}) ---")
+    logger.log(f"--- Pax Console v{APP_VERSION} 啟動 (模式: {os.getenv('PAX_MODE', 'local').upper()}) ---")
     
     instructions = (
-        "• 範圍: [bold white]本月 1 日至今日[/bold white]\n"
-        "• 預設: [bold white]09:00 - 18:00[/bold white]\n"
-        "• 原因: [bold white]忘刷[/bold white]\n"
-        "• 指令: [cyan]exit[/cyan] 退出系統 | [cyan]Enter[/cyan] 使用預設"
+        "* 範圍: [bold white]本月 1 日至今日[/bold white]\n"
+        "* 預設: [bold white]09:00 - 18:00[/bold white]\n"
+        "* 原因: [bold white]忘刷[/bold white]\n"
+        "* 指令: [cyan]exit[/cyan] 退出系統 | [cyan]Enter[/cyan] 使用預設"
     )
     console.print(Panel(instructions, title="[grey70]操作說明[/grey70]", border_style="grey37", padding=(1, 2)))
     
@@ -87,14 +103,14 @@ def run_llm_cli():
     try:
         runtime = get_runtime()
     except Exception as e:
-        console.print(f"[bold red]❌ 錯誤: 無法初始化執行環境: {e}[/bold red]")
+        console.print(f"[bold red][X] 錯誤: 無法初始化執行環境: {e}[/bold red]")
         return
 
     console.print("\n[bold bright_white]請問我可以為您做什麼呢？[/bold bright_white]")
 
     accumulated_message = ""
     while True:
-        user_message = prompt_with_default("[bold cyan]❯[/bold cyan]")
+        user_message = prompt_with_default("[bold cyan]>[/bold cyan]")
         
         if user_message.lower() in ['exit', 'quit', '退出', 'stop']:
             console.print("\n[bold yellow]感謝使用 Pax，再見！[/bold yellow]")
@@ -132,23 +148,23 @@ def run_llm_cli():
             execute_result = runtime.execute_action(action_result, cookies=current_cookies)
             
             if execute_result['status'] == 'success':
-                console.print(f"[bold green]✓ {execute_result['message']}[/bold green]")
+                console.print(f"[bold green][OK] {execute_result['message']}[/bold green]")
                 accumulated_message = "" 
             elif execute_result['status'] == 'auth_failed':
-                console.print(f"\n[bold bright_red]⚠️ 需要認證:[/bold bright_red] {execute_result['message']}")
+                console.print(f"\n[bold bright_red][!] 需要認證:[/bold bright_red] {execute_result['message']}")
                 console.print("[dim]正在為您開啟登入瀏覽器...[/dim]\n")
                 
                 from app.get_token import get_tokens_from_browser
                 get_tokens_from_browser()
-                console.print("\n[bold green]✓ 認證已更新！請再說一遍您的要求。[/bold green]")
+                console.print("\n[bold green][OK] 認證已更新！請再說一遍您的要求。[/bold green]")
                 continue
             else:
-                console.print(f"[bold red]❌ 執行失敗: {execute_result['message']}[/bold red]")
+                console.print(f"[bold red][X] 執行失敗: {execute_result['message']}[/bold red]")
 
             console.print("\n")
 
         except Exception as e:
-            console.print(f"[bold red]❌ 發生程式異常: {e}[/bold red]")
+            console.print(f"[bold red][X] 發生程式異常: {e}[/bold red]")
             import traceback
             console.print(f"[grey37]{traceback.format_exc()}[/grey37]")
             console.print("\n")

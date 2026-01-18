@@ -48,12 +48,6 @@ class LLMHandler:
         # 導入 prompt 建立函數
         from app.llm_prompt import prompt_create
         
-        # 建立 prompt
-        user_prompt = prompt_create(user_message=message)
-        
-        # 取得 MCP 工具連接資訊
-        connection_info = self._get_mcp_connection_info()
-        
         # 建立 agent
         agent = akasha.agents(
             model=self.model,
@@ -62,6 +56,14 @@ class LLMHandler:
             max_input_tokens=self.max_input_tokens,
             max_output_tokens=self.max_output_tokens
         )
+        
+        # 建立 prompt
+        user_prompt = prompt_create(user_message=message)
+        print(f"\n[Debug] --- LLM Prompt Start ---\n{user_prompt}\n[Debug] --- LLM Prompt End ---\n")
+        
+        # 取得 MCP 工具連接資訊
+        connection_info = self._get_mcp_connection_info()
+        print(f"[Debug] MCP Tools to akasha: {list(connection_info.keys())}")
         
         # 調用 LLM（同步方法）
         response = agent.mcp_agent(connection_info, user_prompt)
@@ -121,7 +123,11 @@ class LLMHandler:
             }
             
         return mcp_tools
-    
+
+    def _parse_response(self, llm_response: str, original_message: str) -> Dict[str, Any]:
+        """
+        將 LLM 的回應解析為結構化指令
+        """
         import json
         import re
 
@@ -132,30 +138,30 @@ class LLMHandler:
             if json_match:
                 data = json.loads(json_match.group(1))
                 # 如果符合我們要求的新結構，直接回傳
-                if "action" in data and "response" in data:
+                if "action" in data and ("response" in data or "description" in data):
                     return {
                         "action": data["action"],
                         "params": data.get("params", {}),
-                        "description": data["response"],
+                        "description": data.get("response") or data.get("description", ""),
                         "requires_confirmation": data.get("requires_confirmation", False)
                     }
         except Exception:
             pass # 如果解析失敗，進入傳統關鍵字判定邏輯
 
-        # 傳統關鍵字判定與 fallback
-        if "work_times" in llm_response.lower() or "工時" in original_message:
+        # 傳統關鍵字判定與 fallback (兼容舊版或解析失敗)
+        if "submit_work_times" in llm_response.lower() or "work_times" in llm_response.lower() or "工時" in original_message:
             return {
                 "action": "submit_work_time",
                 "params": {"response": llm_response},
-                "description": "LLM 已處理您的工時請求",
+                "description": "已為您準備好工時處理指令",
                 "requires_confirmation": False
             }
         
-        if "InWorkRoute" in llm_response or "出差" in original_message:
+        if "apply_travel" in llm_response or "InWorkRoute" in llm_response or "出差" in original_message:
             return {
                 "action": "apply_travel",
                 "params": {"response": llm_response},
-                "description": "LLM 已處理您的出差申請",
+                "description": "已為您準備好出差申請指令",
                 "requires_confirmation": False
             }
         

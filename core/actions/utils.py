@@ -31,9 +31,13 @@ def get_auth_cookies() -> Dict[str, str]:
     import dotenv
     import sys
     
-    # 智慧路徑判斷：如果是打包後的 .exe，就讀取執行檔當前目錄
+    # 智慧路徑判斷：如果是打包後的 .exe，或是使用嵌入式 Python 的 Portable 版
     if getattr(sys, 'frozen', False):
         base_dir = os.path.dirname(sys.executable)
+    elif "runtime" in os.path.abspath(sys.executable).lower() and "python" in os.path.abspath(sys.executable).lower():
+        # 專門處理 Portable 版：python.exe 位在 runtime/python/，但 .env 在根目錄
+        # .../dist/portable/runtime/python/python.exe -> 往上兩層
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.executable))))
     else:
         # 開發環境下，從 core/actions/utils.py 往上三層回到根目錄
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

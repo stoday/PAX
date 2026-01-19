@@ -69,8 +69,37 @@ def prompt_create(user_message=""):
 arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark="" 來產生每日工時資訊。
 
 # 出差單填寫規則:
-1. 預設使用大眾交通工具規劃路線(maps_directions)
-2. 通過工具精確抓取交通花費，並整理成 InWorkRoute 格式。
+    1. 至少需要時間、出差地點資訊才能進行出差單填寫，若使用者提供的資訊不足，請先詢問需要補充的資訊。
+    2. 預設使用大眾交通工具規劃路線(maps_directions)，預設由民生科技服務大樓出發，若使用者有指定起始點，請以使用者指定的地點為主。
+    3. 當規畫中有需要搭乘公車的部分，將起始點與終點設為開車進行距離與時間測量，若搭乘公車前後有步行規劃，連同步行行程也納入開車計算。
+    4. 若有改為開車，則使用計程車價格(taxi_fare_estimator)計算費用。
+    5. 通過 tools 精確抓取大眾交通工具 (高鐵(thsr_fare_estimator)、台鐵(tr_fare_estimator)) 的花費，並整理成 InWorkRoute 格式。
+    6. 根據以上資料進行填寫出差單的 InWorkRoute 欄位，並回傳符合格式 List。
+    7. 若有多段路程，請將每段步行以外的路程以 [{"NUMBER":1,...}, {"NUMBER":2,...}] 的形式回傳。
+    "InWorkRoute": [
+        {
+            "NUMBER": 1,
+            "SOURCE": "R",
+            "UUID": "",
+            "FORMID": "",
+            "ORD": 0,
+            "BDATE": "<start_date, ex: 2025/12/11>",
+            "MOVER": <mover, ex: Y>, #搭乘交通工具編號僅有[高鐵:A,飛機:B,輪船:C,客運:D,火車(自強):E,火車(莒光):F,火車(復興):G,火車(普通):H,火車(電聯車):I,捷運:X,計程車:Y,其他:Z]
+            "MOVER_NAME": "<mover_name, ex: 計程車>" #僅有[高鐵,飛機,輪船,客運,火車(自強),火車(莒光),火車(復興),火車(普通),火車(電聯車),捷運,計程車,其他],
+            "MOVER_OTHER": "",
+            "BPLACE": "<begin_location>" #該路程起始點,
+            "EPLACE": "<end_location>" #該路程終點,
+            "REASON": "<reason_for_taxi>" #搭乘原因,
+            "PRICE": "<price>" #該路程費用,
+            "PRICE_FMT": "<price>" #該路程費用(同PRICE)),
+            "ACTYEAR": <ACTYEAR, ex: 2026> #出差年,
+            "PROJID": "",
+            "PROJID_NAME": "",
+            "VALID_FLAG": "1",
+            "UD_ADD": "Y",
+        }
+    ],
+    8. 產生完以上 list 後，使用 tool dc_apply 將出差單資料提交到系統中。
 """
 
     final_prompt = base_prompt + mode_instruction + rule_sections + f"""

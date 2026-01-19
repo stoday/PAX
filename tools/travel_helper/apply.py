@@ -108,7 +108,7 @@ def get_user_info(session, headers):
         # 使用空條件搜尋（通常會返回當前使用者或其部門的員工）
         payload = {
             "F_DeptNo": "",  # 空白表示不限部門
-            "KeyWord": os.getenv("CLIENT_USERNAME", "970123") #"260107"#"970123"     # 空白表示不限關鍵字
+            "KeyWord": os.getenv("CLIENT_USERNAME", "260107") #"260107"#"970123"     # 空白表示不限關鍵字
         }
         
         print("[cyan]正在取得使用者資訊...[/cyan]", file=sys.stderr)
@@ -134,6 +134,110 @@ def get_user_info(session, headers):
         print(f"[yellow]取得使用者資訊時發生錯誤: {e}[/yellow]", file=sys.stderr)
     
     return None
+
+def fetch_emp_projects(empno: str, sdate: str, edate: str, dept: str = "", form_type: str = "DC", formid: str = "") -> Dict[str, Any]:
+    """
+    呼叫 GetEmpProject 取得專案清單。
+
+    Args:
+        empno: 由前面取得的使用者 EMPNO
+        sdate: 開始日期（字串，格式依後端需求）
+        edate: 結束日期（字串，格式依後端需求）
+        dept: 部門代碼（可選）
+        form_type: 表單類型，預設 "DC"
+        formid: 表單編號（可選）
+
+    Returns:
+        {
+            "status_code": int,
+            "projects": [{"PROJECTNO": "", "PROJECTNAME": ""}, ...],
+            "raw_count": int
+        }
+    """
+    url = "https://expapply.iii.org.tw/expApply/Commons.asmx/GetEmpProject"
+
+    # 正規化日期格式為 yyyy/mm/dd
+    def _normalize_ymd(date_str: str) -> str:
+        if not date_str:
+            return ""
+        if "/" in date_str:
+            return date_str
+        if "-" in date_str:
+            return date_str.replace("-", "/")
+        return date_str
+
+    sdate = _normalize_ymd(sdate)
+    edate = _normalize_ymd(edate)
+
+    session = requests.Session()
+
+    cookie_values = {
+        "ASP.NET_SessionId": os.getenv("ASP_NET_SESSION_ID", ""),
+        "clientTicket": os.getenv("CLIENT_TICKET", ""),
+        "clientUserName": os.getenv("CLIENT_USERNAME", ""),
+    }
+    for name, value in cookie_values.items():
+        if value:
+            session.cookies.set(
+                name=name,
+                value=value,
+                domain="expapply.iii.org.tw",
+                path="/",
+                secure=True,
+            )
+
+    headers = get_post_headers()
+    headers.update({
+        "Content-Type": "application/json; charset=utf-8",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+    })
+
+    payload = {
+        "model": {
+            "FORM_TYPE": form_type,
+            "DEPT": dept,
+            "EMPNO": empno,
+            "SDATE": sdate,
+            "EDATE": edate,
+            "FORMID": formid,
+        }
+    }
+
+    try:
+        resp = session.post(url, data=json.dumps(payload, ensure_ascii=False), headers=headers, timeout=15)
+    except Exception as e:
+        return {"error": "request_failed", "message": str(e)}
+
+    # 解析 .asmx 回應格式: {"d": "[...]"}
+    items = []
+    try:
+        data = json.loads(resp.text)
+        if isinstance(data, dict) and "d" in data:
+            inner = data.get("d")
+            if isinstance(inner, str):
+                data = json.loads(inner)
+            else:
+                data = inner
+        if isinstance(data, list):
+            items = data
+    except Exception:
+        items = []
+
+    projects = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        projects.append({
+            "PROJECTNO": item.get("PROJECTNO", ""),
+            "PROJECTNAME": item.get("PROJECTNAME", ""),
+        })
+
+    return {
+        "status_code": resp.status_code,
+        "projects": projects,
+        "raw_count": len(items),
+    }
 
 def build_savedc_payload(**kwargs) -> Dict[str, str]:
     """
@@ -302,6 +406,7 @@ def dc_apply(InWorkRoute):
     edate = ""
     outdays = ""
     projid = ""
+    projid_name = ""
     all_projid_chk = "N" #是否用顯示全部計畫
     no_projid_chk = "N"  #是否用顯示全部計畫
     comments = ""
@@ -351,6 +456,23 @@ def dc_apply(InWorkRoute):
         edate = end_d.strftime("%Y/%m/%d")
         outdays = str((end_d - start_d).days + 1)
 
+    # 取得專案清單（使用前面取得的 EMPNO 與計算出的 SDATE/EDATE）
+    if apy_emp and bdate and edate:
+        project_resp = fetch_emp_projects(apy_emp, bdate, edate, dept=apy_dept)
+        if isinstance(project_resp, dict) and project_resp.get("projects"):
+            print(f"[cyan]取得專案數量: {len(project_resp['projects'])}[/cyan]", file=sys.stderr)
+            projects = project_resp.get("projects", [])
+            selected = None
+            for p in reversed(projects):
+                if isinstance(p, dict) and p.get("PROJECTNO"):
+                    selected = p
+                    break
+            if selected is None and projects:
+                selected = projects[-1]
+            if isinstance(selected, dict):
+                projid = selected.get("PROJECTNO", "")
+                projid_name = selected.get("PROJECTNAME", "")
+
     # 依照 InWorkRoute 建立 ApplyItem（僅映射有的欄位，缺少則留空）
     if isinstance(parsed_route, list) and parsed_route:
         for idx, r in enumerate(parsed_route, start=1):
@@ -375,6 +497,27 @@ def dc_apply(InWorkRoute):
                 "PROJID": r.get("PROJID", ""),
                 "PROJID_NAME": r.get("PROJID_NAME", "")
             })
+
+    # 追加雜費項目（放在 ApplyItem 最後），沿用前一筆的 ACTYEAR/PROJID/PROJID_NAME
+    last_item = apply_items[-1] if apply_items else {}
+    apply_items.append({
+        "NUMBER": len(apply_items) + 1,
+        "SOURCE": "A",
+        "UUID": "",
+        "FORMID": "",
+        "ORD": 0,
+        "ITEM_NAME": "雜費",
+        "DESC1": "每日上限為 400 元",
+        "REASON": None,
+        "ACTNAME": "旅運費",
+        "ACTYEAR": last_item.get("ACTYEAR", ""),
+        "PROJID": last_item.get("PROJID", ""),
+        "PROJID_NAME": last_item.get("PROJID_NAME", "                                                        "),
+        "ESTPRICE": 400,
+        "ESTPRICE_FMT": "400",
+        "VALID_FLAG": None,
+        "UD_ADD": None
+    })
 
     payload = {
         # ---- 系統狀態 ----
@@ -434,6 +577,18 @@ def dc_apply(InWorkRoute):
         "ChgInfo": chg_info,
         "prepay": prepay_obj
     }
+
+    # 最後送出前，強制覆寫 payload 內所有 PROJID / PROJID_NAME
+    if projid or projid_name:
+        payload["InWorkCont"]["PROJID"] = projid
+        for item in payload.get("ApplyItem", []):
+            if isinstance(item, dict):
+                item["PROJID"] = projid
+                item["PROJID_NAME"] = projid_name
+        for item in payload.get("InWorkRoute", []):
+            if isinstance(item, dict):
+                item["PROJID"] = projid
+                item["PROJID_NAME"] = projid_name
     payload = build_savedc_payload(**payload)
     print("轉換後的 payload 如下：")
     print(json.dumps(payload, ensure_ascii=False, indent=4))
@@ -482,29 +637,29 @@ def dc_apply(InWorkRoute):
 
 if __name__ == "__main__":
     # 簡單執行入口：從命令列傳入 JSON 字串或檔案路徑，否則使用示範資料
-    # InWorkRoute = []
+    InWorkRoute = []
 
-    # if len(sys.argv) > 1:
-    #     arg = sys.argv[1]
-    #     if os.path.isfile(arg):
-    #         try:
-    #             with open(arg, "r", encoding="utf-8") as f:
-    #                 InWorkRoute = json.load(f)
-    #         except Exception:
-    #             InWorkRoute = []
-    #     else:
-    #         try:
-    #             InWorkRoute = json.loads(arg)
-    #         except Exception:
-    #             InWorkRoute = []
+    if len(sys.argv) > 1:
+        arg = sys.argv[1]
+        if os.path.isfile(arg):
+            try:
+                with open(arg, "r", encoding="utf-8") as f:
+                    InWorkRoute = json.load(f)
+            except Exception:
+                InWorkRoute = []
+        else:
+            try:
+                InWorkRoute = json.loads(arg)
+            except Exception:
+                InWorkRoute = []
 
-    # if not isinstance(InWorkRoute, list):
-    #     InWorkRoute = []
+    if not isinstance(InWorkRoute, list):
+        InWorkRoute = []
 
-    # # 若未提供或解析失敗，使用一筆示範資料
-    # if not InWorkRoute:
-    #     InWorkRoute = [{"NUMBER": 1, "SOURCE": "R", "UUID": "", "FORMID": "", "ORD": 0, "BDATE": "2026/01/19", "MOVER": "A", "MOVER_NAME": "高鐵", "MOVER_OTHER": "", "BPLACE": "臺北車站", "EPLACE": "高鐵臺中站", "REASON": "出差", "PRICE": "700", "PRICE_FMT": "700", "ACTYEAR": 2026, "PROJID": "", "PROJID_NAME": "", "VALID_FLAG": "1", "UD_ADD": "Y"}, {"NUMBER": 2, "SOURCE": "R", "UUID": "", "FORMID": "", "ORD": 0, "BDATE": "2026/01/19", "MOVER": "Y", "MOVER_NAME": "計程車", "MOVER_OTHER": "", "BPLACE": "高鐵臺中站", "EPLACE": "臺中科技大學", "REASON": "出差 (公車路線以計程車費用估算)", "PRICE": "360", "PRICE_FMT": "360", "ACTYEAR": 2026, "PROJID": "", "PROJID_NAME": "", "VALID_FLAG": "1", "UD_ADD": "Y"}]
+    # 若未提供或解析失敗，使用一筆示範資料
+    if not InWorkRoute:
+        InWorkRoute = [{"NUMBER": 1, "SOURCE": "R", "UUID": "", "FORMID": "", "ORD": 0, "BDATE": "2026/01/19", "MOVER": "A", "MOVER_NAME": "高鐵", "MOVER_OTHER": "", "BPLACE": "臺北車站", "EPLACE": "高鐵臺中站", "REASON": "出差", "PRICE": "700", "PRICE_FMT": "700", "ACTYEAR": 2026, "PROJID": "", "PROJID_NAME": "", "VALID_FLAG": "1", "UD_ADD": "Y"}, {"NUMBER": 2, "SOURCE": "R", "UUID": "", "FORMID": "", "ORD": 0, "BDATE": "2026/01/19", "MOVER": "Y", "MOVER_NAME": "計程車", "MOVER_OTHER": "", "BPLACE": "高鐵臺中站", "EPLACE": "臺中科技大學", "REASON": "出差 (公車路線以計程車費用估算)", "PRICE": "360", "PRICE_FMT": "360", "ACTYEAR": 2026, "PROJID": "", "PROJID_NAME": "", "VALID_FLAG": "1", "UD_ADD": "Y"}]
 
-    # dc_apply(InWorkRoute)
+    dc_apply(InWorkRoute)
 
-    mcp.run(transport="stdio")
+    # mcp.run(transport="stdio")

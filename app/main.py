@@ -80,7 +80,6 @@ def prompt_with_default(prompt_text, default_value=None):
     user_input = console.input(prompt).strip()
     return user_input or (default_value if default_value is not None else "")
 
-
 def run_llm_cli():
     display_welcome_banner()
     
@@ -92,10 +91,14 @@ def run_llm_cli():
     logger.log(f"--- Pax Console v{APP_VERSION} 啟動 (模式: {os.getenv('PAX_MODE', 'local').upper()}) ---")
     
     instructions = (
+        "[bold cyan]工時填寫[/bold cyan]\n"
         "* 範圍: [bold white]本月 1 日至今日[/bold white]\n"
-        "* 預設: [bold white]09:00 - 18:00[/bold white]\n"
-        "* 原因: [bold white]忘刷[/bold white]\n"
-        "* 指令: [cyan]exit[/cyan] 退出系統 | [cyan]Enter[/cyan] 使用預設"
+        "* 預設: [bold white]09:00 - 18:00[/bold white] | 原因: [bold white]忘刷[/bold white]\n\n"
+        "[bold cyan]出差單申請[/bold cyan]\n"
+        "* 指令: [bold white]『建立出差單』[/bold white] 或描述日期、地點、交通與費用\n"
+        "* 功能: 自動彙整路線與費用，預設帶入最後一筆專案編號\n\n"
+        "[bold cyan]系統指令[/bold cyan]\n"
+        "* 指令: [cyan]exit[/cyan] 退出 | [cyan]Enter[/cyan] 使用預設"
     )
     console.print(Panel(instructions, title="[grey70]操作說明[/grey70]", border_style="grey37", padding=(1, 2)))
     

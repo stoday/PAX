@@ -2,6 +2,15 @@
 
 > **您的智慧行政助理 — 讓工時填寫與差旅申請變得前所未有的簡單。**
 
+## 🌐 快速安裝
+如果你想從 GitHub 直接安裝：
+```bash
+git clone https://github.com/stoday/PAX.git
+cd PAX
+git checkout travel-helper
+pip install -e .
+```
+
 Pax 是一款整合了 LLM (Gemini) 與 MCP (Model Context Protocol) 技術的智慧助手，專為簡化繁瑣的行政流程而設計。
 
 ## 🚀 快速開始 (推薦：可攜式版本)
@@ -33,6 +42,16 @@ Pax 是一款整合了 LLM (Gemini) 與 MCP (Model Context Protocol) 技術的�
 ## 🛠️ 開發與建置
 
 如果您是開發者，想要自行建置可攜式發佈包：
+
+```text
+╭── Pax 便利工作助手 ──╮
+│     ____             │
+│    / __ \____ __  __ │
+│   / /_/ / __ `/ |/_/ │
+│  / ____/ /_/ />  <   │
+│ /_/    \__,_/_/|_|   │
+╰──────────────────────╯
+```
 
 ### 1. 環境需求
 *   [Python 3.10+](https://www.python.org/)

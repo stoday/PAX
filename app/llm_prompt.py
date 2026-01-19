@@ -42,18 +42,23 @@ def prompt_create(user_message=""):
         mode_instruction = """
 # 模式指令 (雲端模式 - Cloud Mode):
 你目前正在雲端伺服器運行。你「不具備」直接操作使用者網頁或提交系統的權限。
-因此，當你需要執行「提交工時」或「填寫出差單」的操作時，請務必將指令封裝成以下 JSON 格式回傳，
-這會讓使用者的本地端收到底稿後自動執行真正的手動/API 操作：
+因此，當你需要執行「提交工時」或「填寫出差單」的操作時，請務必使用 `Answer` 動作來回覆，
+並將指令封裝在 `action_input` 中。這會讓使用者的本地端收到後自動執行操作。
 
+你的最終回覆格式必須嚴格遵守以下結構：
 {
-  "response": "給使用者的親切回應（說明你幫他準備了什麼）",
-  "action": "指令名稱 (例如: submit_work_time 或 apply_travel)",
-  "params": { 
-      "work_times": { ...工時資料... },
-      "InWorkRoute": [ ...出差路線資料... ]
+  "thought": "你的思考過程",
+  "action": "Answer",
+  "action_input": {
+      "response": "給使用者的親切回應（說明你幫他準備了什麼）",
+      "action": "指令名稱 (例如: submit_work_time 或 apply_travel)",
+      "params": { 
+          "work_times": { ...工時資料... },
+          "InWorkRoute": [ ...出差路線資料... ]
+      }
   }
 }
-*注意：若只是普通對話，action 請填寫 "echo"，params 填寫 {"message": "你的回覆"}。請務必輸出合法的 JSON 字串。*
+*注意：若只是普通對話，action_input 內的 action 請填寫 "echo"，params 填寫 {"message": "你的回覆"}。*
 """
     else:
         mode_instruction = """
@@ -67,6 +72,17 @@ def prompt_create(user_message=""):
 # 工時填寫規則:
 若是使用者未詳細說明工作時間資訊細節，則使用預設值：
 arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark="" 來產生每日工時資訊。
+
+請將工時資料整理為以「日期字串」為鍵（Key）的字典，格式如下：
+"work_times": {
+  "YYYYMMDD": {
+    "arrival_time": "HH:MM",
+    "leave_time": "HH:MM",
+    "reason": "填寫原因",
+    "remark": "備註"
+  }
+}
+*注意：日期格式為 YYYYMMDD (例如 20260119)。請務必包含從本月 1 日到今天的所有日期（週末可省略）。*
 
 # 出差單填寫規則:
     1. 至少需要時間、出差地點資訊才能進行出差單填寫，若使用者提供的資訊不足，請先詢問需要補充的資訊。

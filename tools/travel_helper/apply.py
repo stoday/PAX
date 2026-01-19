@@ -590,8 +590,8 @@ def dc_apply(InWorkRoute):
                 item["PROJID"] = projid
                 item["PROJID_NAME"] = projid_name
     payload = build_savedc_payload(**payload)
-    print("轉換後的 payload 如下：")
-    print(json.dumps(payload, ensure_ascii=False, indent=4))
+    print("轉換後的 payload 如下：", file=sys.stderr)
+    print(json.dumps(payload, ensure_ascii=False, indent=4), file=sys.stderr)
 
     # ===============================
     # 4. 檢查隱藏欄位並準備 payload
@@ -622,14 +622,14 @@ def dc_apply(InWorkRoute):
         headers=get_post_headers()
     )
     try:
-        print("暫存狀態碼:", save_resp.status_code)
-        print("暫存回應內容:")
-        print(save_resp.text)
+        print("暫存狀態碼:", save_resp.status_code, file=sys.stderr)
+        print("暫存回應內容:", file=sys.stderr)
+        print(save_resp.text, file=sys.stderr)
 
         # ===============================
         # 6. 提示使用者開啟官方頁面
         # ===============================
-        print(FORM_URL)
+        print(FORM_URL, file=sys.stderr)
     except Exception as e:
         print(f"[yellow]解析暫存回應時發生錯誤: {e}[/yellow]", file=sys.stderr)
         return {"error": "失敗", "message": str(e)}
@@ -662,4 +662,4 @@ if __name__ == "__main__":
 
     dc_apply(InWorkRoute)
 
-    # mcp.run(transport="stdio")
+    mcp.run(transport="stdio")

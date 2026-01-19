@@ -20,9 +20,7 @@ def get_dynamic_user_agent():
             return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
     elif system == "Windows":
         try:
-            version_map = {'10': '10.0', '11': '10.0'}
-            win_version = version_map.get(platform.release(), '10.0')
-            return f"Mozilla/5.0 (Windows NT {win_version}; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
         except:
             return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
     return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
@@ -36,10 +34,9 @@ def get_auth_cookies() -> Dict[str, str]:
         base_dir = os.path.dirname(sys.executable)
     elif "runtime" in os.path.abspath(sys.executable).lower() and "python" in os.path.abspath(sys.executable).lower():
         # 專門處理 Portable 版：python.exe 位在 runtime/python/，但 .env 在根目錄
-        # .../dist/portable/runtime/python/python.exe -> 往上兩層
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.executable))))
     else:
-        # 開發環境下，從 core/actions/utils.py 往上三層回到根目錄
+        # 開發環境下，回到根目錄
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     
     env_path = os.path.join(base_dir, ".env")

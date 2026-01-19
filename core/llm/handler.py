@@ -137,8 +137,13 @@ class LLMHandler:
             json_match = re.search(r"({.*})", llm_response, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group(1))
+                
+                # 如果這是 akasha 的標準輸出的包裹格式，則取其內部 action_input
+                if data.get("action") == "Answer" and "action_input" in data:
+                    data = data["action_input"]
+                
                 # 如果符合我們要求的新結構，直接回傳
-                if "action" in data and ("response" in data or "description" in data):
+                if isinstance(data, dict) and "action" in data and ("response" in data or "description" in data):
                     return {
                         "action": data["action"],
                         "params": data.get("params", {}),

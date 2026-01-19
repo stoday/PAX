@@ -406,4 +406,3 @@ if __name__ == "__main__":
             
         runner = TrayRunner()
         runner.setup_tray()
-        runner.run()

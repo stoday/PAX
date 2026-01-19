@@ -230,7 +230,7 @@ def tr_fare_estimator(start, end, traintype):
 
     soup = BeautifulSoup(r.text, "html.parser")
     csrf = soup.find("input", {"name": "_csrf"})["value"]
-    print("取得 CSRF:", csrf)
+    print("取得 CSRF:", csrf, file=sys.stderr)
 
     url = "https://www.railway.gov.tw/tra-tip-web/tip/tip001/tip114/query"
 
@@ -266,7 +266,7 @@ def tr_fare_estimator(start, end, traintype):
         # 找到第二個 span 中的 strong
         price_tag = total_row.find("span", class_="red").find("strong")
         total_price = price_tag.text.strip()
-        print(total_price)
+        print(total_price, file=sys.stderr)
 
 
     return total_price

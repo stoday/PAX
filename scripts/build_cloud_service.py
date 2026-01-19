@@ -80,8 +80,8 @@ def setup_client_env():
     subprocess.run([os.path.join(py_dir, "python.exe"), pip_script, "--no-warn-script-location"], check=True, stdout=subprocess.DEVNULL)
     
     # 為 Client 安裝僅需的基礎套件 (不要裝 akasha/torch 等大型庫)
-    log("Installing slim requirements (requests, selenium, pydantic, beautifulsoup4, rich) for Client...")
-    slim_reqs = ["requests", "selenium", "python-dotenv", "rich", "pyfiglet", "pydantic", "beautifulsoup4"]
+    log("Installing slim requirements (requests, selenium, pydantic, beautifulsoup4, rich, pystray, pillow) for Client...")
+    slim_reqs = ["requests", "selenium", "python-dotenv", "rich", "pyfiglet", "pydantic", "beautifulsoup4", "pystray", "Pillow"]
     subprocess.run([os.path.join(py_dir, "python.exe"), "-m", "pip", "install"] + slim_reqs, check=True, stdout=subprocess.DEVNULL)
     
     if os.path.exists(pip_script): os.remove(pip_script)
@@ -120,21 +120,27 @@ def build_client():
     with open(src_env, 'r', encoding='utf-8') as f:
         lines = f.readlines()
     
+    # Create the client .env file
     with open(os.path.join(CLIENT_DIR, ".env"), 'w', encoding='utf-8') as f:
         f.write("# Pax Client Environment Settings (Sanitized)\n")
-        # 直接指定 Cloud Client 必要的模式
         f.write("PAX_MODE=cloud\n")
         
-        for line in lines:
-            if "=" in line:
-                key = line.split("=")[0].strip()
-                # 如果是 PAX_MODE，我們已經在上面寫過了，跳過它
-                if key == "PAX_MODE":
-                    continue
-                if key in client_keys:
-                    f.write(line)
-            elif line.strip().startswith("#") or not line.strip():
-                f.write(line)
+        # Load all from source env
+        source_vars = {}
+        if os.path.exists(src_env):
+            with open(src_env, 'r', encoding='utf-8') as sf:
+                for line in sf:
+                    if "=" in line and not line.strip().startswith("#"):
+                        parts = line.split("=", 1)
+                        source_vars[parts[0].strip()] = parts[1].strip()
+
+        # Write only allowed keys
+        for key in client_keys:
+            if key == "PAX_MODE": continue
+            if key in source_vars:
+                f.write(f"{key}={source_vars[key]}\n")
+            elif key == "AUTO_FILL_TIME":
+                f.write("AUTO_FILL_TIME=17:55\n") # Default if missing
     
     # 建立啟動捷徑
     log("Creating PaxClient.bat...")
@@ -143,11 +149,19 @@ setlocal
 set "ROOT=%~dp0"
 set "PY_PATH=%ROOT%runtime\\python"
 set "PATH=%PY_PATH%;%PY_PATH%\\Scripts;%PATH%"
+set "PYTHONPATH=%ROOT%"
 set "PAX_MODE=cloud"
 
+if "%1"=="--debug" (
+    echo [DEBUG MODE] Starting Pax in foreground...
+    "%PY_PATH%\\python.exe" "%ROOT%ui\\tray_app.py"
+    pause
+    exit /b
+)
+
 echo Starting Pax (Cloud Client Mode)...
-"%PY_PATH%\\python.exe" "%ROOT%app\\main.py"
-pause
+start "" "%PY_PATH%\\pythonw.exe" "%ROOT%ui\\tray_app.py"
+exit
 """
     with open(os.path.join(CLIENT_DIR, "PaxClient.bat"), "w", encoding="utf-8") as f:
         f.write(bat_content)

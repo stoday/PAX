@@ -2,6 +2,14 @@
 import os
 import datetime
 import glob
+import sys
+
+# 嘗試強化控制台輸出編碼
+try:
+    if sys.stdout.encoding.lower() != 'utf-8':
+        sys.stdout.reconfigure(encoding='utf-8')
+except:
+    pass
 
 class PaxLogger:
     def __init__(self, base_dir: str):
@@ -25,7 +33,7 @@ class PaxLogger:
         try:
             with open(log_file, "a", encoding="utf-8") as f:
                 f.write(entry)
-            print(f"[PaxLog] {entry.strip()}")
+            print(f">>> [Pax] {entry.strip()}", flush=True)
         except Exception as e:
             print(f"Failed to write log: {e}")
 

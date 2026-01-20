@@ -7,6 +7,7 @@ import zipfile
 import subprocess
 import time
 import traceback
+import tomli
 
 # English logs for stability with the agent console
 def log(msg):
@@ -80,8 +81,8 @@ def setup_client_env():
     subprocess.run([os.path.join(py_dir, "python.exe"), pip_script, "--no-warn-script-location"], check=True, stdout=subprocess.DEVNULL)
     
     # 為 Client 安裝僅需的基礎套件 (不要裝 akasha/torch 等大型庫)
-    log("Installing slim requirements (requests, selenium, pydantic, beautifulsoup4, rich, pystray, pillow) for Client...")
-    slim_reqs = ["requests", "selenium", "python-dotenv", "rich", "pyfiglet", "pydantic", "beautifulsoup4", "pystray", "Pillow"]
+    log("Installing slim requirements (requests, selenium, pydantic, beautifulsoup4, rich, pystray, pillow, tomli) for Client...")
+    slim_reqs = ["requests", "selenium", "python-dotenv", "rich", "pyfiglet", "pydantic", "beautifulsoup4", "pystray", "Pillow", "tomli"]
     subprocess.run([os.path.join(py_dir, "python.exe"), "-m", "pip", "install"] + slim_reqs, check=True, stdout=subprocess.DEVNULL)
     
     if os.path.exists(pip_script): os.remove(pip_script)
@@ -134,9 +135,23 @@ def build_client():
                         parts = line.split("=", 1)
                         source_vars[parts[0].strip()] = parts[1].strip()
 
+        # Try to read server_url from config.toml
+        config_path = os.path.join(BASE_DIR, "config.toml")
+        default_server_url = "http://localhost:8000"
+        if os.path.exists(config_path):
+            with open(config_path, "rb") as cf:
+                config = tomli.load(cf)
+                default_server_url = config.get("server", {}).get("server_url", default_server_url)
+
         # Write only allowed keys
         for key in client_keys:
             if key == "PAX_MODE": continue
+            if key == "PAX_SERVER_URL":
+                # Use value from config.toml if it exists in source env, ELSE use default from config.toml
+                val = source_vars.get(key, default_server_url)
+                f.write(f"{key}={val}\n")
+                continue
+                
             if key in source_vars:
                 f.write(f"{key}={source_vars[key]}\n")
             elif key == "AUTO_FILL_TIME":

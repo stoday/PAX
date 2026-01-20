@@ -23,6 +23,7 @@ rich==14.2.0
 selenium>=4.0.0
 urllib3==2.5.0
 webdriver-manager>=3.8.0
+tomli>=2.0.0
 
 
 # 檔案目錄服務相關依賴

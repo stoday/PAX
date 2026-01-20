@@ -25,9 +25,39 @@ class CloudRuntime(RuntimeAdapter):
         初始化雲端執行環境
         
         Args:
-            server_url: 後端伺服器 URL。如果為 None，則從環境變數 PAX_SERVER_URL 讀取。
+            server_url: 後端伺服器 URL。如果為 None，則依序從 環境變數 PAX_SERVER_URL 與 config.toml 讀取。
         """
-        self.server_url = server_url or os.getenv("PAX_SERVER_URL", "http://localhost:8000")
+        # 1. 優先使用傳入參數
+        self.server_url = server_url
+        
+        # 2. 其次使用環境變數
+        if not self.server_url:
+            self.server_url = os.getenv("PAX_SERVER_URL")
+            
+        # 3. 再其次從 config.toml 讀取
+        if not self.server_url:
+            try:
+                import tomli
+                # 假設 config.toml 在 root (與 app/core 同層)
+                # CloudRuntime 通常在 runtime/cloud/client/executor.py
+                # dist 結構下，root 是 dist/cloud/client/
+                # 所以 config.toml 在 ../../../config.toml ? 
+                # 不，在 build_cloud_service.py 中，config.toml 是被複製到 CLIENT_DIR 的 root。
+                # 而 executor.py 会被导入。我们需要找到正确的 root。
+                # 在 client 中，PYTHONPATH 會包含 CLIENT_DIR。
+                base_dir = os.getcwd() # 啟動時的目錄，通常是 root
+                config_path = os.path.join(base_dir, "config.toml")
+                if os.path.exists(config_path):
+                    with open(config_path, "rb") as cf:
+                        config = tomli.load(cf)
+                        self.server_url = config.get("server", {}).get("server_url")
+            except:
+                pass
+                
+        # 4. 最後使用預設值
+        if not self.server_url:
+            self.server_url = "http://localhost:8000"
+            
         print(f"[CloudRuntime] 雲端執行環境已初始化，伺服器: {self.server_url}")
     
     def process_message(

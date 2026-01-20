@@ -22,6 +22,22 @@ sys.path.insert(0, base_dir)
 # 載入環境變數
 dotenv.load_dotenv(os.path.join(base_dir, ".env"))
 
+# 嘗試載入 config.toml 設定 (Host/Port)
+host = "0.0.0.0"
+port = 8000
+try:
+    import tomli
+    config_path = os.path.join(base_dir, "config.toml")
+    if os.path.exists(config_path):
+        with open(config_path, "rb") as cf:
+            config = tomli.load(cf)
+            server_cfg = config.get("server", {})
+            host = server_cfg.get("host", host)
+            port = server_cfg.get("port", port)
+            print(f"[Server] 從 config.toml 載入設定: {host}:{port}")
+except Exception as e:
+    print(f"[Server] 無法載入 config.toml 設定，使用預設值: {e}")
+
 print(f"\n[Server Debug] Current File Path: {os.path.abspath(__file__)}")
 print(f"[Server Debug] Base Directory: {base_dir}")
 print(f"[Server Debug] Core Module Path: {os.path.join(base_dir, 'core')}")
@@ -85,4 +101,4 @@ async def chat(request: ChatRequest, _ = Depends(verify_api_key)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=host, port=port)

@@ -1,4 +1,9 @@
 [general]
-version = "0.7"
+version = "0.8"
 app_name = "Pax"
 description = "Your Smart AI Executive Assistant"
+
+[server]
+host = "0.0.0.0"                            # Server 端監聽所有 IP
+port = 8003                                 # Server 端監聽的 Port
+server_url = "https://pax.demo-today.org"   # client 會透過這個網址連線 Server

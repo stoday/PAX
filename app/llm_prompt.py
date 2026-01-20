@@ -115,7 +115,9 @@ arrival_time="09:00"、leave_time="18:00"、reason="忘刷"、remark="" 來產�
             "UD_ADD": "Y",
         }
     ],
-    8. 產生完以上 list 後，使用 tool dc_apply 將出差單資料提交到系統中。
+    8. "REASON": "<reason_for_taxi>" #搭乘原因如果用戶沒有說明，則自動填入「因攜帶展示設備」或是「因公務時間需要短時間往返」等類似的說詞。
+    9. 生成完去程 InWorkRoute 後，請再生成回程 InWorkRoute，並將兩者合併後回傳。回程即是將去程的 BPLACE 與 EPLACE 互換即可，其餘欄位皆相同。
+    10. 產生完以上 list 後，使用 tool dc_apply 將出差單資料提交到系統中。
 """
 
     final_prompt = base_prompt + mode_instruction + rule_sections + f"""

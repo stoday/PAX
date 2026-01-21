@@ -20,9 +20,11 @@ Pax 是一款整合了 LLM (Gemini) 與 MCP (Model Context Protocol) 技術的�
 1. **下載與啟動**：
    - 下載 `Pax-Portable.zip` 並解壓縮。
    - 執行 **`Pax.bat`**。
-2. **配置金鑰**：
-   - 編輯 `.env` 檔案，填入您的 `GEMINI_API_KEY`。
-3. **開始使用**：
+2. **配置與金鑰**：
+   - 編輯 **`config.toml`**，設定版號與服務資訊。
+   - 編輯 `.env` 檔案，填入您的 `GEMINI_API_KEY` 與 Session 資訊。
+3. **雲端連線設定**：
+   - 若使用雲端模式，可在 `config.toml` 的 `[server]` 區塊統一設定 IP 與 URL。
    - 在右下角系統匣選單點擊 **「打開 Pax Console」**。
    - 直接輸入：「幫我報今天 9 點到 6 點的工時」或「查詢去台中的油錢」。
 

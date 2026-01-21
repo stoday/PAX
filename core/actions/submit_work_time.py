@@ -153,17 +153,20 @@ def submit_work_time(cookies: Optional[Dict[str, Any]] = None, **params) -> Dict
             if value: session.cookies.set(name, value, domain='hrwt.iii.org.tw')
             
         # 1. 獲取頁面隱藏欄位
-        resp = session.get(BASE_TIMESHEET_URL, headers=headers, timeout=20)
+        resp = session.get(BASE_TIMESHEET_URL, headers=headers, timeout=20, allow_redirects=False)
         # 強制指定編碼，避免 requests 誤判 (III 系統有時是 Big5 但 Header 沒寫清楚)
         # 但通常現代網頁是 utf-8，我們先嘗試 apparent_encoding
         resp.encoding = resp.apparent_encoding or "utf-8"
+        
+        if resp.status_code == 302 or "Login.aspx" in resp.url:
+            return {"status": "auth_failed", "message": "認證無效，網頁已被重定向至登入頁面。"}
         
         if resp.status_code != 200:
             return {"status": "error", "message": f"無法存取網頁 (HTTP {resp.status_code})"}
         
         soup = BeautifulSoup(resp.text, 'html.parser')
         if not soup.find('input', {'name': '__VIEWSTATE'}):
-            return {"status": "auth_failed", "message": "認證無效，請重新登入。"}
+            return {"status": "auth_failed", "message": "認證無效，無法取得網頁狀態欄位。"}
         
         # 2. 準備 Payload
         payload = generate_form_payload(target_year_month, work_times, soup)

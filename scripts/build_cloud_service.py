@@ -81,8 +81,8 @@ def setup_client_env():
     subprocess.run([os.path.join(py_dir, "python.exe"), pip_script, "--no-warn-script-location"], check=True, stdout=subprocess.DEVNULL)
     
     # 為 Client 安裝僅需的基礎套件 (不要裝 akasha/torch 等大型庫)
-    log("Installing slim requirements (requests, selenium, pydantic, beautifulsoup4, rich, pystray, pillow, tomli) for Client...")
-    slim_reqs = ["requests", "selenium", "python-dotenv", "rich", "pyfiglet", "pydantic", "beautifulsoup4", "pystray", "Pillow", "tomli"]
+    log("Installing slim requirements (requests, selenium, webdriver-manager, pydantic, beautifulsoup4, rich, pystray, pillow, tomli) for Client...")
+    slim_reqs = ["requests", "selenium", "webdriver-manager", "python-dotenv", "rich", "pyfiglet", "pydantic", "beautifulsoup4", "pystray", "Pillow", "tomli"]
     subprocess.run([os.path.join(py_dir, "python.exe"), "-m", "pip", "install"] + slim_reqs, check=True, stdout=subprocess.DEVNULL)
     
     if os.path.exists(pip_script): os.remove(pip_script)
@@ -147,8 +147,8 @@ def build_client():
         for key in client_keys:
             if key == "PAX_MODE": continue
             if key == "PAX_SERVER_URL":
-                # Use value from config.toml if it exists in source env, ELSE use default from config.toml
-                val = source_vars.get(key, default_server_url)
+                # 優先使用 config.toml 的值，如果 config.toml 沒設才看 source .env
+                val = default_server_url if default_server_url != "http://localhost:8000" else source_vars.get(key, default_server_url)
                 f.write(f"{key}={val}\n")
                 continue
                 

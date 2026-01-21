@@ -101,4 +101,5 @@ async def chat(request: ChatRequest, _ = Depends(verify_api_key)):
 
 if __name__ == "__main__":
     import uvicorn
+    print(f"[Server] 正在啟動伺服器: {host}:{port}")
     uvicorn.run(app, host=host, port=port)

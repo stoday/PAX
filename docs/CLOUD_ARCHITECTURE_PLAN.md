@@ -49,13 +49,11 @@ graph TD
 
 ---
 
-## 3. 認證機制 (Simple Security)
-採用 **自動化脫敏認證機制**：
-1.  **環境設定**: 統一在根目錄 `.env` 設定，建置腳本會自動進行以下處理：
-    - **Server 端**: 移除使用者 Session (如 `CLIENT_TICKET`)，僅保留 API Key。實現「清淨大腦」模式。
-    - **Client 端**: 移除 API Key (如 `GEMINI_API_KEY`)，僅保留使用者 Session。防止 Key 外流。
-2.  **格式規範**: `.env` 中的數值**不使用單引號或雙引號**，確保跨平台解析穩定性。
-3.  **通訊安全**: 所有 API 請求必須攜帶 `X-API-KEY` 標頭，並全程透過 HTTPS 傳輸。
+3.  **認證機制 (Simple Security)**： 
+    - 採用 **自動化脫敏認證機制**。
+    - 使用 **`config.toml`** 集中管理伺服器連線資訊 (IP/Port/URL)，Build 腳本會自動同步。
+4.  **格式規範**: `.env` 中的數值**不使用單引號或雙引號**，確保跨平台解析穩定性。
+5.  **通訊安全**: 所有 API 請求必須攜帶 `X-API-KEY` 標頭，並全程透過 HTTPS 傳輸。
 
 ---
 
@@ -74,6 +72,7 @@ graph TD
 *   **`dist/cloud/client/`**: 
     *   **特性**: 使用瘦身後的嵌入式 Python（約 100MB），移除大型 AI 庫。
     *   **安全**: 自動移除 `GEMINI_API_KEY` 等敏感金鑰，僅保留執行用憑證。
+    *   **配置**: 自動從 `config.toml` 同步 `PAX_SERVER_URL`。
     *   **產出**: **`PaxClient.bat`**。
 
 ---

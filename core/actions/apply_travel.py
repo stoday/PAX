@@ -64,9 +64,9 @@ def apply_travel(cookies: Optional[Dict[str, Any]] = None, **params) -> Dict[str
         headers = {"User-Agent": user_agent}
         
         # 1. 存取表單頁面取得隱藏欄位
-        resp = session.get(FORM_URL, headers=headers, timeout=20)
-        if "Login.aspx" in resp.url:
-            return {"status": "auth_failed", "message": "認證失效，請重新登入。"}
+        resp = session.get(FORM_URL, headers=headers, timeout=20, allow_redirects=False)
+        if resp.status_code == 302 or "Login.aspx" in resp.url:
+            return {"status": "auth_failed", "message": "認證無效，系統已被引導至登入頁面。"}
             
         soup = BeautifulSoup(resp.text, 'html.parser')
         viewstate = soup.find('input', {'name': '__VIEWSTATE'})

@@ -167,14 +167,22 @@ set "PATH=%PY_PATH%;%PY_PATH%\\Scripts;%PATH%"
 set "PYTHONPATH=%ROOT%"
 set "PAX_MODE=cloud"
 
+if exist "%ROOT%.env" (
+    for /f "usebackq tokens=1* delims==" %%A in (`findstr /b /c:"PAX_SERVER_URL=" "%ROOT%.env"`) do (
+        set "PAX_SERVER_URL=%%B"
+    )
+)
+
 if "%1"=="--debug" (
     echo [DEBUG MODE] Starting Pax in foreground...
+    if defined PAX_SERVER_URL echo Using PAX_SERVER_URL=%PAX_SERVER_URL%
     "%PY_PATH%\\python.exe" "%ROOT%ui\\tray_app.py"
     pause
     exit /b
 )
 
 echo Starting Pax (Cloud Client Mode)...
+if defined PAX_SERVER_URL echo Using PAX_SERVER_URL=%PAX_SERVER_URL%
 start "" "%PY_PATH%\\pythonw.exe" "%ROOT%ui\\tray_app.py"
 exit
 """

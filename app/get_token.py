@@ -35,9 +35,8 @@ def persist_env_value(env_key: str, value: str) -> None:
     if not value:
         return
 
-    # 為值加上雙引號
-    quoted_value = f'"{value}"'
-    set_key(str(ENV_PATH), env_key, quoted_value)
+    # 直接寫入原始值，不加引號
+    set_key(str(ENV_PATH), env_key, value)
     
     preview = f"{value[:37]}..." if len(value) > 40 else value
     print(f"[成功] {env_key} => {preview}")

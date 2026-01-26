@@ -81,8 +81,8 @@ def setup_client_env():
     subprocess.run([os.path.join(py_dir, "python.exe"), pip_script, "--no-warn-script-location"], check=True, stdout=subprocess.DEVNULL)
     
     # 為 Client 安裝僅需的基礎套件 (不要裝 akasha/torch 等大型庫)
-    log("Installing slim requirements (requests, selenium, webdriver-manager, pydantic, beautifulsoup4, rich, pystray, pillow, tomli) for Client...")
-    slim_reqs = ["requests", "selenium", "webdriver-manager", "python-dotenv", "rich", "pyfiglet", "pydantic", "beautifulsoup4", "pystray", "Pillow", "tomli"]
+    log("Installing slim requirements (requests, selenium, webdriver-manager, pydantic, beautifulsoup4, rich, pystray, pillow, tomli, browser_cookie3) for Client...")
+    slim_reqs = ["requests", "selenium", "webdriver-manager", "python-dotenv", "rich", "pyfiglet", "pydantic", "beautifulsoup4", "pystray", "Pillow", "tomli", "browser_cookie3"]
     subprocess.run([os.path.join(py_dir, "python.exe"), "-m", "pip", "install"] + slim_reqs, check=True, stdout=subprocess.DEVNULL)
     
     if os.path.exists(pip_script): os.remove(pip_script)

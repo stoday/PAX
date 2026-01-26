@@ -152,8 +152,10 @@ def submit_work_time(cookies: Optional[Dict[str, Any]] = None, **params) -> Dict
         for name, value in auth_cookies.items():
             if value: session.cookies.set(name, value, domain='hrwt.iii.org.tw')
             
-        # 1. 獲取頁面隱藏欄位
-        resp = session.get(BASE_TIMESHEET_URL, headers=headers, timeout=20, allow_redirects=False)
+        submit_url = f"{BASE_TIMESHEET_URL}?YM={target_year_month}"
+        
+        # 1. 獲取頁面隱藏欄位 (使用完整的 URL 以確保 ViewState 對應正確的月份)
+        resp = session.get(submit_url, headers=headers, timeout=20, allow_redirects=False)
         # 強制指定編碼，避免 requests 誤判 (III 系統有時是 Big5 但 Header 沒寫清楚)
         # 但通常現代網頁是 utf-8，我們先嘗試 apparent_encoding
         resp.encoding = resp.apparent_encoding or "utf-8"
@@ -173,12 +175,10 @@ def submit_work_time(cookies: Optional[Dict[str, Any]] = None, **params) -> Dict
         if payload is None:
             return {"status": "auth_failed", "message": "無法從網頁抓取必要欄位，可能是認證失效。"}
         
-        # 3. 執行 POST 提交 (包含 YM 參數以確保目標月份正確)
         from urllib.parse import quote
         from core.logger import get_pax_logger
         logger = get_pax_logger()
         
-        submit_url = f"{BASE_TIMESHEET_URL}?YM={quote(target_year_month)}"
         # 更新 Referer 確保包含 YM 參數
         headers["Referer"] = submit_url
         logger.log(f"正在提交工時至: {submit_url}")

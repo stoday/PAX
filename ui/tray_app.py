@@ -194,8 +194,28 @@ class TrayRunner:
                 get_tokens_from_browser()
                 self._notify("認證完成", "已成功獲取認證資料，Pax 現在已準備就緒！")
                 self.logger.log("自動認證完成")
+                # 認證成功後，啟動 Keep-Alive
+                self._start_token_keeper()
             except Exception as e:
                 self.debug_log(f"自動認證失敗: {e}")
+        else:
+            # 已有認證，直接啟動 Keep-Alive
+            self._start_token_keeper()
+
+    def _start_token_keeper(self):
+        """啟動 Token 自動保鮮服務"""
+        try:
+            from core.token_keeper import keeper
+            keeper.on_expired = self._on_token_expired
+            keeper.start()
+            self.debug_log("TokenKeeper 服務已啟動")
+        except Exception as e:
+            self.debug_log(f"啟動 TokenKeeper 失敗: {e}")
+
+    def _on_token_expired(self):
+        """當 TokenKeeper 回報 Token 失效時的回調"""
+        self.logger.log("Token 已失效 (Keep-Alive 檢測)，發出通知")
+        self._notify("Pax 認證已過期", "您的登入憑證已失效，請重新開啟 Pax Console 進行認證。")
 
     def create_image(self, running=False):
         """建立狀態圖示"""
@@ -286,6 +306,10 @@ class TrayRunner:
     def on_quit(self, icon, item):
         self.logger.log("--- Pax Tray App 結束 ---")
         self.running = False
+        try:
+            from core.token_keeper import keeper
+            keeper.stop()
+        except: pass
         icon.stop()
         os._exit(0)
 
@@ -339,12 +363,43 @@ class TrayRunner:
 
         threading.Thread(target=create_window, daemon=True).start()
 
+    def open_auth_window(self):
+        """開啟獨立的認證更新視窗"""
+        try:
+            self.debug_log("手動啟動認證視窗...")
+            python_exe = sys.executable
+            if python_exe.lower().endswith("pythonw.exe"):
+                python_exe = python_exe.lower().replace("pythonw.exe", "python.exe")
+            
+            # 使用 --auth-only 參數
+            if getattr(sys, 'frozen', False):
+                # 打包模式
+                # TODO: 這裡可能需要修改 pyinstaller 的 spec 支援參數
+                main_script = [sys.executable, "--auth-only"]
+            else:
+                # 開發模式
+                main_py = os.path.join(self.base_dir, "app", "main.py")
+                main_script = [python_exe, main_py, "--auth-only"]
+            
+            env = os.environ.copy()
+            env["PYTHONPATH"] = self.base_dir + os.pathsep + env.get("PYTHONPATH", "")
+            
+            subprocess.Popen(
+                main_script,
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+                cwd=self.base_dir,
+                env=env
+            )
+        except Exception as e:
+            self.debug_log(f"啟動認證視窗失敗: {e}")
+
     def setup_tray(self):
         """建立系統匣選單與圖示"""
         try:
             print("[TrayApp] 正在建立系統匣功能面板...")
             menu_items = [
-                pystray.MenuItem("打開 Pax Console", self.open_pax_console)
+                pystray.MenuItem("打開 Pax Console", self.open_pax_console),
+                pystray.MenuItem("手動更新憑證", self.open_auth_window)
             ]
             
             # 無論有沒有 TK 都顯示歷史紀錄 (沒有就用 Notepad)

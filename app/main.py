@@ -155,11 +155,32 @@ def run_llm_cli():
                 accumulated_message = "" 
             elif execute_result['status'] == 'auth_failed':
                 console.print(f"\n[bold bright_red][!] 需要認證:[/bold bright_red] {execute_result['message']}")
-                console.print("[dim]正在為您開啟登入瀏覽器...[/dim]\n")
                 
                 from app.get_token import get_tokens_from_browser
-                get_tokens_from_browser()
-                console.print("\n[bold green][OK] 認證已更新！請再說一遍您的要求。[/bold green]")
+                
+                # 1. 嘗試背景 (Silent) 更新
+                console.print("[dim]正在嘗試利用快取認證自動更新...[/dim]")
+                if get_tokens_from_browser(headless=True):
+                    console.print("[bold green][OK] 認證已自動更新！正在為您重新處理...[/bold green]")
+                    # 自動重試一次
+                    execute_result = runtime.execute_action(action_result, cookies=get_auth_cookies())
+                    if execute_result['status'] == 'success':
+                        console.print(f"[bold green][OK] {execute_result['message']}[/bold green]")
+                        accumulated_message = ""
+                        continue
+
+                # 2. 如果背景更新失敗，則開啟視窗
+                console.print("[bold yellow][!] 自動更新失效，請手動登入瀏覽器...[/bold yellow]")
+                if get_tokens_from_browser(headless=False):
+                    console.print("\n[bold green][OK] 認證已成功擷取！正在嘗試自動重試指令...[/bold green]")
+                    # 重新取得 Cookies 並重試
+                    execute_result = runtime.execute_action(action_result, cookies=get_auth_cookies())
+                    if execute_result['status'] == 'success':
+                        console.print(f"[bold green][OK] {execute_result['message']}[/bold green]")
+                        accumulated_message = ""
+                        continue
+                else:
+                    console.print("\n[bold red][X] 認證擷取失敗。[/bold red]")
                 continue
             else:
                 console.print(f"[bold red][X] 執行失敗: {execute_result['message']}[/bold red]")
@@ -173,8 +194,29 @@ def run_llm_cli():
             console.print("\n")
 
 
+def run_auth_cli():
+    """僅執行認證流程的 CLI"""
+    display_welcome_banner()
+    console.print("\n[bold cyan]--- 認證更新模式 ---[/bold cyan]\n")
+    
+    from app.get_token import get_tokens_from_browser
+    try:
+        success = get_tokens_from_browser(headless=False)
+        if success:
+            console.print("\n[bold green][OK] 認證已更新成功！您現在可以關閉此視窗。[/bold green]")
+        else:
+            console.print("\n[bold red][X] 認證更新失敗。[/bold red]")
+    except Exception as e:
+        console.print(f"\n[bold red][X] 發生錯誤: {e}[/bold red]")
+    
+    input("\n按任意鍵結束...")
+
 if __name__ == "__main__":
     import dotenv
     # 強制從 .env 讀取，即使環境變數已存在也覆蓋
     dotenv.load_dotenv(override=True)
-    run_llm_cli()
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "--auth-only":
+        run_auth_cli()
+    else:
+        run_llm_cli()

@@ -66,7 +66,6 @@ class TrayRunner:
         self.version = get_app_version(self.base_dir)
         
         print(f"[TrayApp] 初始化中，版本: {self.version}, 目前模式: {self.mode.upper()}")
-        print(f"[TrayApp Debug] Base Directory: {self.base_dir}")
         self.logger = get_pax_logger(self.base_dir)
         self.logger.log(f"--- Pax Tray App v{self.version} 啟動 ---")
         self.debug_log(f"程式啟動，版本: {self.version}, 初始模式: {self.mode}")

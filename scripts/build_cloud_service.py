@@ -27,23 +27,51 @@ LOG_FILE = os.path.join(BASE_DIR, "build_cloud_process.log")
 PYTHON_ZIP_URL = "https://www.python.org/ftp/python/3.10.11/python-3.10.11-embed-amd64.zip"
 GET_PIP_URL = "https://bootstrap.pypa.io/get-pip.py"
 
-def rmtree_with_retry(path, retries=5):
+import stat
+
+def on_rm_error(func, path, exc_info):
+    # path contains the path of the file that couldn't be removed
+    # let's try to rename it to see if it's locked? No, just chmod
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except Exception:
+        pass
+
+def rmtree_with_retry(path, retries=10):
     if not os.path.exists(path):
         return
     log(f"Removing {path}...")
+    
+    # helper to check if path is gone
+    def is_gone(p):
+        return not os.path.exists(p)
+
     for i in range(retries):
         try:
             if os.path.isdir(path):
-                shutil.rmtree(path)
+                shutil.rmtree(path, onerror=on_rm_error)
             else:
-                os.remove(path)
-            return
+                try:
+                    os.remove(path)
+                except PermissionError:
+                    os.chmod(path, stat.S_IWRITE)
+                    os.remove(path)
+            
+            if is_gone(path):
+                return
         except Exception as e:
             if i == retries - 1:
                 log(f"Failed to delete {path}: {str(e)}")
-                raise e
-            log(f"Retry deleting {path} ({i+1})...")
-            time.sleep(2)
+                # We won't raise, just log, to allow build to try to proceed or fail later
+                # raise e 
+            
+            # If still exists, wait and retry
+            if not is_gone(path):
+                 log(f"Retry deleting {path} ({i+1}/{retries})...")
+                 time.sleep(2)
+            else:
+                return
 
 def download_file(url, dest):
     if os.path.exists(dest):
@@ -213,7 +241,25 @@ def build_server():
     shutil.copytree(os.path.join(BASE_DIR, "runtime", "cloud", "server"), server_code_dst, dirs_exist_ok=True)
     
     # 複製完整的 requirements.txt 供伺服器 pip install
-    shutil.copy2(os.path.join(BASE_DIR, "requirements.txt"), os.path.join(SERVER_DIR, "requirements.txt"))
+    # 生成 Server 專用的 requirements.txt
+    log("Generating Server requirements.txt...")
+    server_reqs = [
+        "fastapi", 
+        "uvicorn", 
+        "python-dotenv", 
+        "pydantic", 
+        "tomli; python_version < '3.11'",
+        "requests", 
+        "beautifulsoup4", 
+        "rich", 
+        "google-generativeai", 
+        "selenium", 
+        "webdriver-manager",
+        "mcp", 
+        "browser_cookie3"
+    ]
+    with open(os.path.join(SERVER_DIR, "requirements.txt"), "w", encoding="utf-8") as f:
+        f.write("\n".join(server_reqs))
     
     # 建立安全且脫敏的伺服器環境配置 (.env)
     log("Creating sanitized .env for Server...")
@@ -269,7 +315,7 @@ if __name__ == "__main__":
         log("--- Cloud Service Build Started ---")
         if os.path.exists(DIST_DIR):
             rmtree_with_retry(DIST_DIR)
-        os.makedirs(DIST_DIR)
+        os.makedirs(DIST_DIR, exist_ok=True)
         
         setup_client_env()
         build_client()

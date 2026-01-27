@@ -66,6 +66,7 @@ class TrayRunner:
         self.version = get_app_version(self.base_dir)
         
         print(f"[TrayApp] 初始化中，版本: {self.version}, 目前模式: {self.mode.upper()}")
+        print(f"[TrayApp Debug] Base Directory: {self.base_dir}")
         self.logger = get_pax_logger(self.base_dir)
         self.logger.log(f"--- Pax Tray App v{self.version} 啟動 ---")
         self.debug_log(f"程式啟動，版本: {self.version}, 初始模式: {self.mode}")
@@ -316,18 +317,23 @@ class TrayRunner:
     def show_history_window(self):
         """顯示最近 7 天的歷史紀錄視窗"""
         if not HAS_TKINTER:
-            # 如果不支援 GUI，嘗試用系統預設記事本開啟
-            log_path = os.path.join(self.base_dir, "pax_tasks.log")
-            if os.path.exists(log_path):
+            # 如果不支援 GUI，嘗試用系統預設記事本開啟最新的一份 Log
+            import glob
+            log_dir = os.path.join(self.base_dir, "logs")
+            log_files = glob.glob(os.path.join(log_dir, "*.log"))
+            
+            if log_files:
+                # 找到最新的檔案
+                latest_log = max(log_files, key=os.path.getmtime)
                 try:
                     import subprocess
                     # 在 Windows 下用 notepad 開啟
-                    subprocess.Popen(['notepad.exe', log_path])
-                    self._notify("日誌檢視", "已使用記事本為您開啟歷史紀錄。")
+                    subprocess.Popen(['notepad.exe', latest_log])
+                    self._notify("日誌檢視", f"已開啟最新紀錄: {os.path.basename(latest_log)}")
                 except:
-                    self._notify("系統限制", "請手動開啟根目錄下的 pax_tasks.log")
+                    self._notify("系統限制", f"無法開啟檔案: {os.path.basename(latest_log)}")
             else:
-                self._notify("系統限制", "目前尚無歷史紀錄。")
+                self._notify("系統限制", "目前尚無任何歷史紀錄檔案。")
             return
 
         def create_window():

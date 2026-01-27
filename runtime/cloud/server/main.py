@@ -26,7 +26,11 @@ dotenv.load_dotenv(os.path.join(base_dir, ".env"))
 host = "0.0.0.0"
 port = 8000
 try:
-    import tomli
+    try:
+        import tomli
+    except ImportError:
+        import tomllib as tomli
+        
     config_path = os.path.join(base_dir, "config.toml")
     if os.path.exists(config_path):
         with open(config_path, "rb") as cf:
@@ -35,6 +39,11 @@ try:
             host = server_cfg.get("host", host)
             port = server_cfg.get("port", port)
             print(f"[Server] 從 config.toml 載入設定: {host}:{port}")
+    else:
+        print(f"[Server] 找不到 config.toml (路徑: {config_path})，使用預設值 {host}:{port}")
+except ImportError:
+    print(f"[Server] 警告: 缺少 'tomli' 模組且 Python 版本 < 3.11，無法讀取 TOML 設定。使用預設值 {host}:{port}")
+    print(f"請執行: pip install tomli")
 except Exception as e:
     print(f"[Server] 無法載入 config.toml 設定，使用預設值: {e}")
 

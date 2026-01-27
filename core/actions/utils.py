@@ -25,21 +25,25 @@ def get_dynamic_user_agent():
             return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
     return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
-def get_auth_cookies() -> Dict[str, str]:
+from typing import Dict, Any, Optional
+
+def get_auth_cookies(env_path: Optional[str] = None) -> Dict[str, str]:
     import dotenv
     import sys
     
-    # 智慧路徑判斷：如果是打包後的 .exe，或是使用嵌入式 Python 的 Portable 版
-    if getattr(sys, 'frozen', False):
-        base_dir = os.path.dirname(sys.executable)
-    elif "runtime" in os.path.abspath(sys.executable).lower() and "python" in os.path.abspath(sys.executable).lower():
-        # 專門處理 Portable 版：python.exe 位在 runtime/python/，但 .env 在根目錄
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.executable))))
-    else:
-        # 開發環境下，回到根目錄
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if not env_path:
+        # 智慧路徑判斷：如果是打包後的 .exe，或是使用嵌入式 Python 的 Portable 版
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        elif "runtime" in os.path.abspath(sys.executable).lower() and "python" in os.path.abspath(sys.executable).lower():
+            # 專門處理 Portable 版：python.exe 位在 runtime/python/，但 .env 在根目錄
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.executable))))
+        else:
+            # 開發環境下，回到根目錄
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        env_path = os.path.join(base_dir, ".env")
     
-    env_path = os.path.join(base_dir, ".env")
     dotenv.load_dotenv(env_path, override=True)
     
     return {

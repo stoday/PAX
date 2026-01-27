@@ -371,6 +371,7 @@ class TrayRunner:
     def open_auth_window(self):
         """開啟獨立的認證更新視窗"""
         try:
+            self.logger.log("使用者手動啟動認證視窗")
             self.debug_log("手動啟動認證視窗...")
             python_exe = sys.executable
             if python_exe.lower().endswith("pythonw.exe"):
